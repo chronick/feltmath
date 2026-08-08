@@ -3,9 +3,12 @@ import { BulbIcon } from '../../../shared/ui/Icons'
 import { Kbd } from '../../../shared/ui/Kbd'
 import type { PokerAction, PokerActionContext } from '../types'
 import { clampChips, formatBB, formatMoney, roundToBB } from './format'
+import type { HoldemKeys } from './keys'
 
 export interface PokerActionBarProps {
   ctx: PokerActionContext
+  /** active hotkey bindings — drives the key labels on the buttons */
+  keys: HoldemKeys
   bigBlind: number
   /** the human's chips already in front on this street — drives pot-raise math */
   streetCommit: number
@@ -43,6 +46,7 @@ const PRESETS: Preset[] = [
 
 export function PokerActionBar({
   ctx,
+  keys,
   bigBlind,
   streetCommit,
   stack,
@@ -140,7 +144,7 @@ export function PokerActionBar({
           onClick={() => onAction({ type: 'fold' })}
         >
           Fold
-          <Kbd>F</Kbd>
+          <Kbd>{keys.fold.label}</Kbd>
         </button>
 
         {ctx.canCheck || !ctx.canCall ? (
@@ -151,7 +155,7 @@ export function PokerActionBar({
             onClick={() => onAction({ type: 'check' })}
           >
             Check
-            <Kbd>C</Kbd>
+            <Kbd>{keys.checkCall.label}</Kbd>
           </button>
         ) : (
           <button
@@ -161,7 +165,7 @@ export function PokerActionBar({
           >
             <span className="pactbtn__main">Call {formatMoney(ctx.callAmount)}</span>
             {callIsAllIn && <em className="pactbtn__note">all-in</em>}
-            <Kbd>C</Kbd>
+            <Kbd>{keys.checkCall.label}</Kbd>
           </button>
         )}
 
@@ -173,7 +177,7 @@ export function PokerActionBar({
           onClick={sizingOpen ? onCloseSizing : onOpenSizing}
         >
           <span className="pactbtn__main">{raiseWord}</span>
-          <Kbd>R</Kbd>
+          <Kbd>{keys.raise.label}</Kbd>
         </button>
       </div>
 
@@ -203,7 +207,7 @@ export function PokerActionBar({
             >
               All-in
               <i className="num">{formatMoney(ctx.maxTo)}</i>
-              <Kbd>A</Kbd>
+              <Kbd>{keys.allin.label}</Kbd>
             </button>
           </div>
 

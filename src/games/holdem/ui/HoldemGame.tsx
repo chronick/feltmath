@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BookIcon, GearIcon } from '../../../shared/ui/Icons'
 import { Kbd } from '../../../shared/ui/Kbd'
+import { useHotkeyLayout } from '../../../shared/ui/hotkeyLayout'
 import { useHotkeys } from '../../../shared/ui/useHotkeys'
 import type { HotkeyMap } from '../../../shared/ui/useHotkeys'
 import {
@@ -32,6 +33,7 @@ import { DEFAULT_HOLDEM } from '../types'
 import { EquityPanel } from './EquityPanel'
 import { HoldemSettings } from './HoldemSettings'
 import { HoldemStats } from './HoldemStats'
+import { holdemKeys } from './keys'
 import { PokerActionBar } from './PokerActionBar'
 import { PokerEventLog } from './PokerEventLog'
 import { PokerHint } from './PokerHint'
@@ -301,6 +303,8 @@ export function HoldemGame() {
   // Rebuilt every render (cheap); useHotkeys reads it through a ref. Modals own
   // the keyboard while open: settings gets nothing (form fields + Esc), the
   // ranges book keeps only its own toggle.
+  const layout = useHotkeyLayout()
+  const keys = holdemKeys(layout)
   const hotkeys = useMemo<HotkeyMap>(() => {
     if (settingsOpen) return {}
     if (rangesOpen) return { b: () => setRangesOpen(false) }
@@ -310,14 +314,15 @@ export function HoldemGame() {
     if (state.phase === 'idle' || state.phase === 'settlement') {
       map.enter = map.space = () => dispatch({ type: 'startHand' })
     } else if (humanTurn) {
-      if (ctx.canFold) map.f = () => act({ type: 'fold' })
-      if (ctx.canCheck) map.c = () => act({ type: 'check' })
-      else if (ctx.canCall) map.c = () => act({ type: 'call' })
+      if (ctx.canFold) map[keys.fold.code] = () => act({ type: 'fold' })
+      if (ctx.canCheck) map[keys.checkCall.code] = () => act({ type: 'check' })
+      else if (ctx.canCall) map[keys.checkCall.code] = () => act({ type: 'call' })
       if (canAggress) {
-        // R arms the sizing tray (and focuses it); A jumps it to the shove.
-        // Enter is always the commit — nothing bets a stack on one keystroke.
-        map.r = () => openSizingAt(sizingOpen ? sizeTo : ctx.minTo)
-        map.a = () => openSizingAt(ctx.maxTo)
+        // The raise key arms the sizing tray (and focuses it); the all-in key
+        // jumps it to the shove. Enter is always the commit — nothing bets a
+        // stack on one keystroke.
+        map[keys.raise.code] = () => openSizingAt(sizingOpen ? sizeTo : ctx.minTo)
+        map[keys.allin.code] = () => openSizingAt(ctx.maxTo)
         map.enter = () => confirmSizing()
       }
       map['?'] = map['/'] = () =>
@@ -328,7 +333,7 @@ export function HoldemGame() {
     // Handlers all read live state through the render closure; the map is
     // rebuilt on every render so nothing here can go stale.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsOpen, rangesOpen, state, humanTurn, ctx, sizingOpen, sizeTo, decisionId])
+  }, [settingsOpen, rangesOpen, state, humanTurn, ctx, sizingOpen, sizeTo, decisionId, keys])
   useHotkeys(hotkeys)
 
   // --- copy ---------------------------------------------------------------
@@ -435,6 +440,7 @@ export function HoldemGame() {
         {humanTurn && (
           <PokerActionBar
             ctx={ctx}
+            keys={keys}
             bigBlind={state.config.bigBlind}
             streetCommit={human.streetCommit}
             stack={human.stack}

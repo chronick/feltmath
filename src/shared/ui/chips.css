@@ -50,11 +50,23 @@
 }
 
 .chipstack__total {
+  display: inline-block;
   font-size: 13px;
   font-weight: 750;
   letter-spacing: 0.01em;
   color: var(--gold-soft);
   font-variant-numeric: tabular-nums;
+  /* keyed by amount, so every change remounts and replays the pop */
+  animation: total-pop 240ms var(--ease-out);
+}
+
+@keyframes total-pop {
+  from {
+    transform: scale(1.22);
+  }
+  to {
+    transform: scale(1);
+  }
 }
 
 .chipstack--sm .chipstack__total {

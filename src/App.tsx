@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from 'react'
+import { useBlurButtonsAfterPointerClick } from './shared/ui/useHotkeys'
 
 const BlackjackGame = lazy(() =>
   import('./games/blackjack/ui/BlackjackGame').then((m) => ({ default: m.BlackjackGame })),
@@ -31,6 +32,7 @@ function initialGame(): string {
 
 export default function App() {
   const [activeId, setActiveId] = useState(initialGame)
+  useBlurButtonsAfterPointerClick()
 
   const select = (id: string) => {
     setActiveId(id)

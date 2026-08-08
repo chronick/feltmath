@@ -192,13 +192,24 @@
   align-items: flex-start;
   justify-content: center;
   gap: clamp(4px, 2vw, 18px);
-  padding: 2px 0;
+  /* Legroom below the seats: hole cards fly in from the board side
+     (--deal-y: 90px) and overflow-x: auto makes this a scroll container that
+     clips anything past its box. The bottom padding keeps the flight inside
+     the scrollport; the negative margin hands the space back to the felt.
+     pointer-events pass through the transparent overlap onto the board. */
+  padding: 2px 0 102px;
+  margin-bottom: -100px;
+  pointer-events: none;
   overflow-x: auto;
   scrollbar-width: none;
   --card-w: 46px;
   --card-h: 66px;
   --deal-x: 0px;
   --deal-y: 90px;
+}
+
+.ptable__seats > .pseat {
+  pointer-events: auto;
 }
 
 .ptable__seats::-webkit-scrollbar {

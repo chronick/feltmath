@@ -1,5 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
+import {
+  setHotkeyLayout,
+  useHotkeyLayout,
+  type HotkeyLayout,
+} from '../../../shared/ui/hotkeyLayout'
 import type { RulesConfig } from '../types'
 import { rulesSummary } from './format'
 
@@ -138,9 +143,15 @@ const DOUBLE_OPTIONS: Option<RulesConfig['doubleOn']>[] = [
   { value: '10to11', label: '10–11' },
 ]
 
+const LAYOUT_OPTIONS: Option<HotkeyLayout>[] = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'ergonomic', label: 'Ergo' },
+]
+
 export function SettingsModal({ rules, canApplyNow, onApply, onClose }: SettingsModalProps) {
   const [draft, setDraft] = useState<RulesConfig>(rules)
   const patch = (next: Partial<RulesConfig>) => setDraft((current) => ({ ...current, ...next }))
+  const layout = useHotkeyLayout()
 
   return (
     <Modal
@@ -267,6 +278,22 @@ export function SettingsModal({ rules, canApplyNow, onApply, onClose }: Settings
             />
             <span className="slider__value num">{Math.round(draft.penetration * 100)}%</span>
           </div>
+        </Row>
+
+        <Row
+          label="Hotkey layout"
+          hint={
+            layout === 'ergonomic'
+              ? 'Space hit · S stand · D double · A split · F surrender — applies now, both games'
+              : 'Letters match the actions (H, S, D, P, R) — applies now, both games'
+          }
+        >
+          <Segmented
+            label="Hotkey layout"
+            value={layout}
+            options={LAYOUT_OPTIONS}
+            onChange={setHotkeyLayout}
+          />
         </Row>
       </div>
     </Modal>
