@@ -1,5 +1,6 @@
 import { ChartIcon } from '../../../shared/ui/Icons'
 import { cssVars } from '../../../shared/ui/cssVars'
+import { monteCarloMargin95 } from '../odds/equity'
 import type { EquityReport, PotOddsReport } from '../types'
 import { Panel } from './Panel'
 import { formatCount, formatMoney, formatPct } from './format'
@@ -25,6 +26,10 @@ export function EquityPanel({ report, odds, open, onToggle }: EquityPanelProps) 
 
   const ahead = report && odds ? report.equity >= odds.requiredEquity : false
   const edge = report && odds ? (report.equity - odds.requiredEquity) * 100 : 0
+  const samplingMargin = report?.method === 'monte-carlo'
+    ? monteCarloMargin95(report.samples) * 100
+    : 0
+  const withinSamplingNoise = report?.method === 'monte-carlo' && Math.abs(edge) <= samplingMargin
 
   return (
     <Panel
@@ -43,7 +48,7 @@ export function EquityPanel({ report, odds, open, onToggle }: EquityPanelProps) 
             <div className="eqp__headline">
               <strong className="eqp__big num">{formatPct(report.equity)}</strong>
               <span className="eqp__vs">
-                vs {report.opponents} opponent{report.opponents === 1 ? '' : 's'}
+                vs {report.opponents} uniformly random hand{report.opponents === 1 ? '' : 's'}
               </span>
             </div>
 
@@ -98,17 +103,19 @@ export function EquityPanel({ report, odds, open, onToggle }: EquityPanelProps) 
               </div>
 
               <p className="eqp__verdict" data-ahead={ahead ? 'true' : 'false'}>
-                {ahead
-                  ? `Ahead of the price by ${edge.toFixed(0)} points — the call is +EV on raw equity.`
-                  : `Behind the price by ${Math.abs(edge).toFixed(0)} points — you need more than the hand has.`}
+                {withinSamplingNoise
+                  ? `The estimate is within the ±${samplingMargin.toFixed(1)}-point sampling margin of the price. The bettor's range can decide this close call.`
+                  : ahead
+                    ? `Above the price by ${edge.toFixed(1)} points against random hands. A value-heavy betting range can make the call worse.`
+                    : `Below the price by ${Math.abs(edge).toFixed(1)} points even against random hands. A betting range can move the result further.`}
               </p>
             </div>
           )}
 
           <p className="eqp__foot">
             {report.method === 'exact'
-              ? 'exact enumeration'
-              : `${formatCount(report.samples)} samples · Monte Carlo`}
+              ? 'exact enumeration · uniformly random hands'
+              : `${formatCount(report.samples)} samples · Monte Carlo · approx. 95% margin ±${samplingMargin.toFixed(1)} points`}
           </p>
         </div>
       )}

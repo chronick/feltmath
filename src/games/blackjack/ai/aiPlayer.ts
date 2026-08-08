@@ -19,8 +19,9 @@ export function aiDecide(
   dealerUp: Rank,
   rules: RulesConfig,
   ctx: ActionContext,
+  canFundDoubleAfterSplit: boolean = rules.doubleAfterSplit,
 ): Action {
-  const { action } = basicStrategy(cards, dealerUp, rules, ctx)
+  const { action } = basicStrategy(cards, dealerUp, rules, ctx, canFundDoubleAfterSplit)
   if (isAllowed(action, ctx)) return action
   // basicStrategy already falls back inside ctx; this only fires if a caller
   // hands us an inconsistent context. Never return an illegal action.

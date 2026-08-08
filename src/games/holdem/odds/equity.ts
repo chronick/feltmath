@@ -96,6 +96,18 @@ function remainingDeck(hole: readonly Card[], board: readonly Card[]): Card[] {
 // Equity
 // ---------------------------------------------------------------------------
 
+/**
+ * Conservative normal-approximation 95% margin for a Monte Carlo estimate.
+ *
+ * A showdown share is bounded in [0, 1], so its standard deviation is at most
+ * 0.5. Multiplying that worst-case standard error by 1.96 gives
+ * 0.98 / sqrt(samples). Exact reports have no sampling margin.
+ */
+export function monteCarloMargin95(samples: number): number {
+  const n = Math.floor(samples)
+  return Number.isFinite(n) && n > 0 ? 0.98 / Math.sqrt(n) : 0
+}
+
 /** Running showdown score across samples/enumerations. */
 interface Tally {
   /** samples where the hero was the sole best hand */

@@ -7,12 +7,13 @@ import type { Card, Rank, Suit } from '../src/shared/cards'
 import { RANKS, SUITS, buildDecks } from '../src/shared/cards'
 import { mulberry32 } from '../src/shared/rng'
 import { evaluate } from '../src/games/holdem/engine/evaluate'
-import { equity, potOdds } from '../src/games/holdem/odds/equity'
+import { equity, monteCarloMargin95, potOdds } from '../src/games/holdem/odds/equity'
 import {
   doPokerAction, holdemStep, needsHoldemStep, newHoldemGame, pokerActionsFor,
   potTotal, startHand, humanHoldemSeat,
 } from '../src/games/holdem/engine/game'
 import { holdemAdvice } from '../src/games/holdem/strategy/advice'
+import { chartAction, vsLimpersChart, vsOpenChart } from '../src/games/holdem/strategy/ranges'
 import { DEFAULT_HOLDEM } from '../src/games/holdem/types'
 import type { HoldemState } from '../src/games/holdem/types'
 // buildDecks also feeds the directed incomplete-raise scenario below
@@ -175,14 +176,87 @@ const hand = (...specs: string[]): Card[] => specs.map(c)
   const det2 = equity(hand('Qs', 'Jh'), hand('2c', '7d', 'Th'), 2, 3000, 99)
   check('deterministic per seed', det1.equity === det2.equity)
 
-  const river = equity(hand('As', 'Ah'), hand('Ad', 'Kd', 'Qc', '7s', '2h'), 1, 5000, 3)
+  const riverHole = hand('As', 'Ah')
+  const riverBoard = hand('Ad', 'Kd', 'Qc', '7s', '2h')
+  const river = equity(riverHole, riverBoard, 1, 5000, 3)
   check('river vs 1 uses exact', river.method === 'exact', `${river.method}/${river.samples}`)
-  const riverMc = equity(hand('As', 'Ah'), hand('Ad', 'Kd', 'Qc', '7s', '2h'), 2, 20000, 3)
-  check('exact ≈ MC same spot (±2.5%)', Math.abs(river.equity - riverMc.equity) < 0.025 ||
-    riverMc.opponents !== 1, `exact=${river.equity.toFixed(3)} mc2opp=${riverMc.equity.toFixed(3)} (different opp counts — sanity only)`)
+
+  // The public equity function deliberately chooses exact enumeration here, so
+  // sample the SAME heads-up river spot independently rather than comparing it
+  // with a different opponent count (which would make the check meaningless).
+  const known = new Set([...riverHole, ...riverBoard].map((card) => `${card.rank}-${card.suit}`))
+  const riverDeck = buildDecks(1).filter((card) => !known.has(`${card.rank}-${card.suit}`))
+  const heroRank = evaluate([...riverHole, ...riverBoard])
+  const riverRng = mulberry32(31337)
+  const RIVER_SAMPLES = 30000
+  let riverShare = 0
+  for (let sample = 0; sample < RIVER_SAMPLES; sample++) {
+    const a = Math.floor(riverRng() * riverDeck.length)
+    let b = Math.floor(riverRng() * (riverDeck.length - 1))
+    if (b >= a) b++
+    const villain = evaluate([riverDeck[a], riverDeck[b], ...riverBoard])
+    if (heroRank.score > villain.score) riverShare += 1
+    else if (heroRank.score === villain.score) riverShare += 0.5
+  }
+  const riverMc = riverShare / RIVER_SAMPLES
+  check('exact ≈ independent MC, same heads-up river (±1%)',
+    Math.abs(river.equity - riverMc) < 0.01,
+    `exact=${river.equity.toFixed(3)} mc=${riverMc.toFixed(3)}`)
 
   const po = potOdds(50, 150)
   check('pot odds 50 into 150 → 25%', Math.abs(po.requiredEquity - 0.25) < 1e-9, po.requiredEquity.toFixed(3))
+  check('1500-sample 95% margin is about 2.5 points',
+    Math.abs(monteCarloMargin95(1500) - 0.0253) < 0.0001,
+    monteCarloMargin95(1500).toFixed(4))
+}
+
+// --- strategy context ---------------------------------------------------------
+{
+  const hjVsOpen = vsOpenChart('HJ')
+  check('HJ versus UTG uses the in-position chart',
+    /in position/i.test(hjVsOpen.situation), hjVsOpen.situation)
+
+  const coVsLimpers = vsLimpersChart('CO')
+  check('limped pot has a distinct 169-combo baseline',
+    Object.keys(coVsLimpers.cells).length === 169 && /limpers/i.test(coVsLimpers.situation),
+    `${Object.keys(coVsLimpers.cells).length}/${coVsLimpers.situation}`)
+  check('limper baseline separates isolate, overlimp, and fold',
+    chartAction(coVsLimpers, 'AKo') === 'raise' &&
+      chartAction(coVsLimpers, '22') === 'call' &&
+      chartAction(coVsLimpers, '72o') === 'fold')
+  check('big blind checks its weak hands versus limpers',
+    chartAction(vsLimpersChart('BB'), '72o') === 'call')
+}
+
+// --- directed: short all-in big blind keeps the full bring-in -----------------
+{
+  const cfg = {
+    ...DEFAULT_HOLDEM,
+    aiPlayers: 2,
+    smallBlind: 5,
+    bigBlind: 10,
+    buyIn: 100,
+    topUp: false,
+  }
+  let s = newHoldemGame(cfg, 717)
+  // First hand: button=0, SB=1, BB=2. Leave the BB only seven chips.
+  s = {
+    ...s,
+    seats: s.seats.map((seat, index) => index === 2 ? { ...seat, stack: 7 } : seat),
+  }
+  s = startHand(s)
+  s = holdemStep(s) // post both blinds
+  check('short BB posts only its stack',
+    s.seats[2].streetCommit === 7 && s.seats[2].allIn,
+    `posted=${s.seats[2].streetCommit}`)
+  check('short BB leaves full blind as preflop bring-in',
+    s.currentBet === 10 && s.lastRaiseSize === 10,
+    `bet=${s.currentBet} raise=${s.lastRaiseSize}`)
+
+  while (s.phase === 'dealing') s = holdemStep(s)
+  const ctx = pokerActionsFor(s)
+  check('UTG still owes the full big blind', ctx.callAmount === 10, `call=${ctx.callAmount}`)
+  check('minimum preflop raise remains two big blinds', ctx.minTo === 20, `minTo=${ctx.minTo}`)
 }
 
 // --- directed: incomplete all-in raise (barred re-raise rule) ------------------
@@ -257,6 +331,42 @@ const hand = (...specs: string[]): Card[] => specs.map(c)
   ] }), { type: 'allin' })
   check('full shove reopens, no bars', f.currentBet === 250 && f.lastRaiseSize === 150 &&
     f.raiseBarred.length === 0 && f.pendingToAct.length === 2, `bet=${f.currentBet} raise=${f.lastRaiseSize}`)
+
+  // Cumulative: A opened 100 and has acted. B's +30 and C's +70 are each short,
+  // but together A now faces a full 100 raise, so action must reopen for A.
+  let cumulative = mk({
+    button: 2,
+    actingIndex: 1,
+    pendingToAct: [1, 2],
+    seats: [
+      { ...base.seats[0], kind: 'ai', hole: hand('As', '7s'), stack: 900, streetCommit: 100, totalCommit: 100 },
+      { ...base.seats[1], kind: 'human', hole: hand('2c', '9d'), stack: 30, streetCommit: 100, totalCommit: 100 },
+      { ...base.seats[2], kind: 'ai', hole: hand('9h', 'Jc'), stack: 100, streetCommit: 100, totalCommit: 100 },
+    ],
+  })
+  cumulative = doPokerAction(cumulative, { type: 'allin' }) // B to 130
+  cumulative = {
+    ...cumulative,
+    seats: cumulative.seats.map((seat, index) => ({
+      ...seat,
+      kind: index === 2 ? 'human' : 'ai',
+    })),
+  }
+  cumulative = doPokerAction(cumulative, { type: 'allin' }) // C to 200
+  cumulative = {
+    ...cumulative,
+    seats: cumulative.seats.map((seat, index) => ({
+      ...seat,
+      kind: index === 0 ? 'human' : 'ai',
+    })),
+  }
+  const cumulativeCtx = pokerActionsFor(cumulative)
+  check('cumulative short all-ins total a full raise',
+    cumulative.currentBet === 200 && cumulative.lastRaiseSize === 100,
+    `bet=${cumulative.currentBet} raise=${cumulative.lastRaiseSize}`)
+  check('cumulative full raise reopens action for prior bettor',
+    cumulative.actingIndex === 0 && cumulativeCtx.canRaise && cumulativeCtx.minTo === 300,
+    `acting=${cumulative.actingIndex} canRaise=${cumulativeCtx.canRaise} minTo=${cumulativeCtx.minTo}`)
 }
 
 // --- engine fuzz ---------------------------------------------------------------
@@ -281,6 +391,8 @@ const hand = (...specs: string[]): Card[] => specs.map(c)
   let rejectedAdvice = 0
   let steps = 0
   let handBase = 0 // Σ stacks at the top of the current hand (post top-up)
+  let potResetChecks = 0
+  let potResetViolations = 0
   const buttonSeen = new Set<number>()
 
   while (hands < HANDS && violations === 0 && steps < 300000) {
@@ -308,6 +420,12 @@ const hand = (...specs: string[]): Card[] => specs.map(c)
       const before = state
       state = startHand(state)
       if (state === before) break // cannot continue (should not happen with topUp)
+      potResetChecks++
+      if (potTotal(state) !== 0) {
+        potResetViolations++
+        violations++
+        console.log(`FAIL pot not reset before hand ${state.handNumber}: ${potTotal(state)}`)
+      }
       handBase = stacksPlusPot(state) // commits are zero here; includes top-ups
       buttonSeen.add(state.button)
       continue
@@ -355,8 +473,9 @@ const hand = (...specs: string[]): Card[] => specs.map(c)
   const human = humanHoldemSeat(state)
   check('fuzz: human stack finite/positive-or-zero', Number.isFinite(human.stack) && human.stack >= 0,
     String(human.stack))
-  check('fuzz: pot empties between hands', state.phase === 'settlement' || potTotal(state) === 0 ||
-    state.phase !== 'idle', `${state.phase}/${potTotal(state)}`)
+  check('fuzz: pot resets before every new hand',
+    potResetViolations === 0 && potResetChecks === hands + 1,
+    `checks=${potResetChecks} hands=${hands} violations=${potResetViolations}`)
 }
 
 console.log(failures === 0 ? '\nALL HOLDEM CHECKS PASSED' : `\n${failures} FAILURES`)

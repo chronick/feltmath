@@ -6,15 +6,16 @@
 // ./ranges.ts so the hint card and the highlighted square in the range modal
 // are always reading the same cell.
 //
-// Postflop there is no chart. The advice compares the hand's actual equity
-// (a small Monte Carlo run) against the price the pot is laying, plus a read of
-// the made hand and the draws. That's real poker reasoning, but it is NOT
-// solver output — it ignores ranges, position dynamics, and the whole
-// game tree beyond this street. Every postflop explanation says so once.
+// Postflop there is no chart. The advice compares a uniformly-random-opponent
+// equity reference against the price the pot is laying, plus a read of the made
+// hand and draws. It is NOT range-aware solver output: betting ranges, position
+// dynamics, and the game tree beyond this street remain human judgment. Every
+// postflop explanation says so once.
 
 import type {
   Card,
   ComboKey,
+  EquityReport,
   HoldemAdvice,
   HoldemState,
   PokerAction,
@@ -24,7 +25,7 @@ import type {
   Street,
 } from '../types'
 import { SUIT_SYMBOL } from '../../../shared/cards'
-import { equity, potOdds } from '../odds/equity'
+import { equity, monteCarloMargin95, potOdds } from '../odds/equity'
 import {
   chartAction,
   comboKeyOf,
@@ -34,18 +35,24 @@ import {
   rangePercent,
   rankValue,
   rfiChart,
+  vsLimpersChart,
   vsOpenChart,
 } from './ranges'
 
 /**
- * Samples for the advice-side equity run. Small on purpose: this is called on
- * every render of the hint card, and ±1% of accuracy never flips a decision
- * that wasn't already a coin flip.
+ * Samples for the advice-side equity run. At 1,500 samples the conservative
+ * normal-approximation 95% margin is 0.98 / sqrt(1500) ≈ 2.5 percentage points.
+ * Recommendations use the lower end of that band for value/price thresholds.
  */
 const ADVICE_SAMPLES = 1500
 
-/** Said once per postflop explanation — never a disclaimer wall. */
-const HEURISTIC = 'equity-and-price coaching, not a solver line'
+/** Said once per postflop explanation — short, but explicit about the model. */
+function equityModelNote(report: EquityReport): string {
+  const sampling = report.method === 'monte-carlo'
+    ? `; approx. 95% sampling margin ±${(monteCarloMargin95(report.samples) * 100).toFixed(1)} points`
+    : ''
+  return `uniform-random-hand reference${sampling}, not a betting-range solver`
+}
 
 // ---------------------------------------------------------------------------
 // Public entry point
@@ -84,8 +91,12 @@ function preflopAdvice(
   const combo = comboKeyOf(hero.hole)
   const hand = cardsText(hero.hole)
   const raises = raisesThisStreet(state)
+  const limperCount = raises === 0 ? limpers(state, heroIndex, bb) : 0
 
   if (raises >= 2) return threeBetPotAdvice(state, ctx, position, combo, hand)
+  if (limperCount > 0) {
+    return limpedPotAdvice(state, ctx, position, combo, hand, heroIndex, bb, limperCount)
+  }
 
   const chart: RangeChart = raises === 0 ? rfiChart(position) : vsOpenChart(position)
   const cell = chartAction(chart, combo)
@@ -95,7 +106,7 @@ function preflopAdvice(
   const inPosition = opener >= 0 ? actsAfter(state, heroIndex, opener) : true
 
   const situation = raises === 0
-    ? `${hand} ${seatPhrase(position)}${limpers(state, heroIndex, bb) > 0 ? ' vs limpers' : ' (first in)'}`
+    ? `${hand} ${seatPhrase(position)} (first in)`
     : `${hand} ${seatPhrase(position)} vs ${openPhrase(openerPos)}`
 
   const chartRef = { position, combo }
@@ -133,7 +144,7 @@ function preflopAdvice(
       action: aggro,
       situation,
       explanation: raises === 0
-        ? `${openReason(state, position, combo, hand, openPct, heroIndex, bb)} ` +
+        ? `${openReason(state, position, combo, hand, openPct, heroIndex)} ` +
           `Raise to ${chips(aggro.to ?? 0)}.${mixNote}`
         : `${threeBetReason(hand, combo, openerPos, inPosition)} ` +
           `3-bet to ${chips(aggro.to ?? 0)} — ${inPosition ? 'three times' : 'four times'} their open, ` +
@@ -182,6 +193,78 @@ function preflopAdvice(
   }
 }
 
+/**
+ * A limped pot is its own situation: isolate a value-heavy range, overlimp
+ * hands with implied odds, and take the big blind's free check with the rest.
+ * Deliberately omits `chart` because the modal has only RFI/vs-open modes.
+ */
+function limpedPotAdvice(
+  state: HoldemState,
+  ctx: PokerActionContext,
+  position: Position,
+  combo: ComboKey,
+  hand: string,
+  heroIndex: number,
+  bb: number,
+  limperCount: number,
+): HoldemAdvice {
+  const cell = chartAction(vsLimpersChart(position), combo)
+  const who = limperCount === 1 ? 'one limper' : `${limperCount} limpers`
+  const situation = `${hand} ${seatPhrase(position)} vs ${who}`
+
+  if (cell === 'raise' || cell === 'mixed') {
+    const to = sizeTo(openSize(state, position, heroIndex, bb), ctx, bb)
+    const aggro = aggressive(to, ctx)
+    if (aggro) {
+      return {
+        action: aggro,
+        situation,
+        explanation:
+          `${hand} is in the value-heavy isolation range against ${who}. Raise to ` +
+          `${chips(aggro.to ?? 0)} — the extra big blind per limper charges the weak calls and tries ` +
+          `to take the betting lead heads-up. This is a 100 bb baseline, not an unopened range.`,
+      }
+    }
+    return {
+      action: passive(ctx),
+      situation,
+      explanation:
+        `${hand} would normally isolate ${who}, but no legal raise remains. ` +
+        `${ctx.canCheck ? 'Take the free flop.' : `Call the ${chips(ctx.callAmount)} and play the pot.`}`,
+    }
+  }
+
+  if (cell === 'call') {
+    if (ctx.canCheck) {
+      return {
+        action: { type: 'check' },
+        situation,
+        explanation:
+          `${hand} is not strong enough to isolate, and the big blind has a free option. Check; ` +
+          `putting in more would turn a free flop into an unnecessary out-of-position pot.`,
+      }
+    }
+    if (ctx.canCall) {
+      return {
+        action: { type: 'call' },
+        situation,
+        explanation:
+          `${hand} has enough implied odds to overlimp for ${chips(ctx.callAmount)}, but not enough ` +
+          `high-card strength to isolate. Keep the pot small and continue only when the flop connects.`,
+      }
+    }
+  }
+
+  return {
+    action: ctx.canCheck ? { type: 'check' } : { type: 'fold' },
+    situation,
+    explanation: ctx.canCheck
+      ? `${hand} is outside the isolation range, but checking costs nothing. Take the free flop.`
+      : `${hand} is outside both the isolation and overlimp ranges against ${who}. Fold rather than ` +
+        `carry a dominated hand into a multiway pot.`,
+  }
+}
+
 /** Opening size in chips: 3bb under the gun, 2.5bb elsewhere, +1bb per limper. */
 function openSize(state: HoldemState, position: Position, heroIndex: number, bb: number): number {
   const limped = limpers(state, heroIndex, bb)
@@ -209,17 +292,9 @@ function openReason(
   hand: string,
   openPct: number,
   heroIndex: number,
-  bb: number,
 ): string {
-  const limped = limpers(state, heroIndex, bb)
   const behind = playersBehind(state, heroIndex)
   const where = positionLabel(position)
-
-  if (limped > 0) {
-    return `${hand} plays far better heads-up than in a five-way limped pot. ` +
-      `${limped === 1 ? 'One player has' : `${limped} players have`} just called — raise to charge them and ` +
-      `to take the betting lead into a flop where they've already shown they don't have much.`
-  }
 
   if (position === 'BTN') {
     return `${hand} is a standard button open. The button plays about ${openPct}% of hands first in ` +
@@ -410,8 +485,13 @@ function postflopAdvice(
     adviceSeed(state),
   )
   const eq = report.equity
+  const margin = report.method === 'monte-carlo' ? monteCarloMargin95(report.samples) : 0
+  const conservativeEq = Math.max(0, eq - margin)
+  const modelNote = equityModelNote(report)
   const made = report.madeHand || 'your hand'
-  const vs = opponents === 1 ? 'against one opponent' : `against ${opponents} opponents`
+  const vs = opponents === 1
+    ? 'against one uniformly random hand'
+    : `against ${opponents} uniformly random hands`
   const streetWord = state.street
 
   const facing = ctx.callAmount > 0
@@ -422,7 +502,7 @@ function postflopAdvice(
   if (facing) {
     const cushion = eq - required
 
-    if (cushion >= 0.15 && eq >= raiseBar(opponents) && ctx.canRaise) {
+    if (conservativeEq - required >= 0.15 && conservativeEq >= raiseBar(opponents) && ctx.canRaise) {
       const to = sizeTo(state.currentBet + 0.7 * (ctx.potSize + ctx.callAmount), ctx, bb)
       const aggro = aggressive(to, ctx)
       if (aggro) {
@@ -433,23 +513,24 @@ function postflopAdvice(
           action: aggro,
           situation,
           explanation:
-            `${capitalize(made)} is ${pct(eq)} ${vs} and calling only needs ${pct(required)} — you're not ` +
-            `just ahead, you're a long way ahead. Raise to ${chips(aggro.to ?? 0)}: ${why}. ` +
-            `(${capitalize(HEURISTIC)}.)`,
+            `${capitalize(made)} is estimated at ${pct(eq)} ${vs} and calling needs ${pct(required)}. ` +
+            `Even the conservative reference is well above that price. Raise to ` +
+            `${chips(aggro.to ?? 0)}: ${why}. (${capitalize(modelNote)}.)`,
           equity: eq,
           requiredEquity: required,
         }
       }
     }
 
-    if (cushion >= 0.02) {
+    if (cushion >= Math.max(0.02, margin)) {
       return {
         action: { type: 'call' },
         situation,
         explanation:
-          `${chips(ctx.callAmount)} to call into a ${chips(ctx.potSize)} pot means you need to win about ` +
-          `${pct(required)} of the time. ${capitalize(made)}${draws.label ? ` with ${draws.label}` : ''} is ` +
-          `${pct(eq)} ${vs} — you're getting a price you can take. Call. (${capitalize(HEURISTIC)}.)`,
+          `${chips(ctx.callAmount)} to call into a ${chips(ctx.potSize)} pot needs about ` +
+          `${pct(required)} equity. ${capitalize(made)}${draws.label ? ` with ${draws.label}` : ''} is ` +
+          `estimated at ${pct(eq)} ${vs}; the conservative reference still clears the price. ` +
+          `Call, while remembering the bettor's real range can move that number. (${capitalize(modelNote)}.)`,
         equity: eq,
         requiredEquity: required,
       }
@@ -460,9 +541,10 @@ function postflopAdvice(
         action: { type: 'call' },
         situation,
         explanation:
-          `You're ${pct(eq)} ${vs} with ${draws.label} and the price asks for ${pct(required)} — that's ` +
-          `close enough that the pot you win when the draw lands makes up the difference, because they'll ` +
-          `pay you off on the ${nextStreet(state.street)}. Call. (${capitalize(HEURISTIC)}.)`,
+          `The estimate is ${pct(eq)} ${vs} with ${draws.label}, while the price asks for ` +
+          `${pct(required)}. That is close enough to continue only on the implied-odds assumption that ` +
+          `a made draw earns more chips on the ${nextStreet(state.street)}. Call cautiously. ` +
+          `(${capitalize(modelNote)}.)`,
         equity: eq,
         requiredEquity: required,
       }
@@ -472,17 +554,17 @@ function postflopAdvice(
       action: { type: 'fold' },
       situation,
       explanation:
-        `${capitalize(made)} is ${pct(eq)} ${vs}, and ${chips(ctx.callAmount)} into a ` +
-        `${chips(ctx.potSize)} pot needs ${pct(required)}. You're being asked to pay more than the hand is ` +
-        `worth${draws.label ? ` — ${draws.label} isn't enough on its own here` : ' and there\'s nothing to draw to'}. ` +
-        `Fold. (${capitalize(HEURISTIC)}.)`,
+        `${capitalize(made)} is estimated at ${pct(eq)} ${vs}, and ${chips(ctx.callAmount)} into a ` +
+        `${chips(ctx.potSize)} pot needs ${pct(required)}. The random-hand reference does not clear the ` +
+        `price${draws.label ? ` — ${draws.label} isn't enough on its own here` : ' and there\'s nothing to draw to'}. ` +
+        `Fold; a value-heavy betting range only strengthens that case. (${capitalize(modelNote)}.)`,
       equity: eq,
       requiredEquity: required,
     }
   }
 
   // --- checked to you ------------------------------------------------------
-  if (eq >= valueBar(opponents) && ctx.canBet) {
+  if (conservativeEq >= valueBar(opponents) && ctx.canBet) {
     const to = sizeTo(state.currentBet + (2 / 3) * ctx.potSize, ctx, bb)
     const aggro = aggressive(to, ctx)
     if (aggro) {
@@ -494,8 +576,9 @@ function postflopAdvice(
         action: aggro,
         situation,
         explanation:
-          `${capitalize(made)} is ${pct(eq)} ${vs} — you're ahead, so get money in while you are. ` +
-          `Bet ${chips(aggro.to ?? 0)}, about two thirds of the pot: ${why}. (${capitalize(HEURISTIC)}.)`,
+          `${capitalize(made)} is estimated at ${pct(eq)} ${vs}, with the conservative reference ` +
+          `still above the value threshold. Bet ${chips(aggro.to ?? 0)}, about two thirds of the pot: ` +
+          `${why}. (${capitalize(modelNote)}.)`,
         equity: eq,
       }
     }
@@ -509,9 +592,9 @@ function postflopAdvice(
         action: aggro,
         situation,
         explanation:
-          `You don't have a made hand yet, but ${draws.label} is ${pct(eq)} ${vs} — and betting wins two ` +
-          `ways: they fold now, or you make the hand later. Bet ${chips(aggro.to ?? 0)}, about half the pot, ` +
-          `which is the cheapest price that still makes them pay. (${capitalize(HEURISTIC)}.)`,
+          `You don't have a made hand yet, but ${draws.label} is estimated at ${pct(eq)} ${vs}. Betting ` +
+          `can win when they fold now or when the draw lands later. Bet ${chips(aggro.to ?? 0)}, about half ` +
+          `the pot. (${capitalize(modelNote)}.)`,
         equity: eq,
       }
     }
@@ -521,9 +604,9 @@ function postflopAdvice(
     action: passive(ctx),
     situation,
     explanation:
-      `${capitalize(made)} is ${pct(eq)} ${vs}${draws.label ? ` with ${draws.label}` : ''} — not enough to ` +
-      `bet for value, and nothing worse than you would call anyway. Check: there's no pot to protect and a ` +
-      `free card can only help. (${capitalize(HEURISTIC)}.)`,
+      `${capitalize(made)} is estimated at ${pct(eq)} ${vs}${draws.label ? ` with ${draws.label}` : ''}. ` +
+      `The conservative reference is not high enough to bet for value. Check and keep the pot controlled; ` +
+      `a real calling range can be much stronger than random hands. (${capitalize(modelNote)}.)`,
     equity: eq,
   }
 }

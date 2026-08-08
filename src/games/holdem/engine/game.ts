@@ -473,9 +473,12 @@ function stepPosting(state: HoldemState): HoldemState {
   let next = postBlind(state, blinds.sb, state.config.smallBlind, 'small')
   next = postBlind(next, blinds.bb, state.config.bigBlind, 'big')
 
-  // A short blind still sets the bar it could afford; the min-raise basis is
-  // the big blind regardless.
-  const currentBet = next.seats.reduce((high, seat) => Math.max(high, seat.streetCommit), 0)
+  // A short all-in big blind does not discount the preflop bring-in: callers
+  // still owe a full big blind and the first minimum raise is to two big blinds.
+  // The short blind's actual commit remains smaller, so normal side-pot layering
+  // still gives it action only on the chips it could cover.
+  const postedHigh = next.seats.reduce((high, seat) => Math.max(high, seat.streetCommit), 0)
+  const currentBet = Math.max(state.config.bigBlind, postedHigh)
   return {
     ...next,
     currentBet,
@@ -735,7 +738,8 @@ function noteVpip(
  *                  lifts.
  * - 'incomplete' — an all-in under-raise: seats that owe chips still get a
  *                  CALL decision, but anyone who had already acted this street
- *                  is barred from re-raising (standard NLHE rule).
+ *                  is barred from re-raising until the cumulative amount they
+ *                  face reaches a full raise (standard NLHE rule).
  * - 'none'       — fold/check/call: the actor just pops off the queue.
  */
 type ActionReopen = 'none' | 'full' | 'incomplete'
@@ -760,6 +764,13 @@ function afterAction(state: HoldemState, index: number, mode: ActionReopen): Hol
       const seat = state.seats[i]
       if (i === index || !canAct(seat)) continue
       if (!wasPending.has(seat.id)) barred.add(seat.id)
+      // Multiple short all-ins can add up to a full raise. Reopen action seat by
+      // seat: what matters is how much THIS player now faces above the amount
+      // they already committed on their last action, not whether the latest
+      // individual all-in was itself a full raise.
+      if (barred.has(seat.id) && state.currentBet - seat.streetCommit >= state.lastRaiseSize) {
+        barred.delete(seat.id)
+      }
     }
     const pending = orderFrom(state, index + 1)
       .filter((i) => i !== index && canAct(state.seats[i]) &&

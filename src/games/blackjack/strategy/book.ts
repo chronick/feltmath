@@ -5,11 +5,10 @@
 // the same tables — so a chart cell and the hint card can never disagree.
 //
 // Base charts are the standard 4–8 deck tables (Wizard of Odds layout) for
-// S17 + DAS. Games where the dealer hits soft 17 apply a short, explicit patch
-// list (`H17_DEVIATIONS`). Rule-dependent codes are then resolved against the
-// active rules: surrender cells fall back to their non-surrender action when
-// late surrender is off, and DAS-only split cells fall back to hit when
-// double-after-split is off.
+// S17 + DAS. Explicit patches then select the one-deck, two-deck, and H17
+// variants. Rule-dependent codes are resolved last: surrender cells fall back
+// to their non-surrender action when late surrender is off, and DAS-only split
+// cells fall back to hit when double-after-split is off.
 
 import type { BookCode, BookTable, BookTables, Rank, RulesConfig } from '../types'
 
@@ -119,6 +118,37 @@ const H17_DEVIATIONS: readonly CellPatch[] = [
   { table: 'hard', row: '17', col: 'A', code: Rs },  // surrender 17 vs ace
 ]
 
+/** Wizard one-deck chart changes shared by S17 and H17. */
+const SINGLE_DECK_DEVIATIONS: readonly CellPatch[] = [
+  { table: 'hard', row: '8', col: '5', code: D },
+  { table: 'hard', row: '8', col: '6', code: D },
+  { table: 'hard', row: '9', col: '2', code: D },
+  { table: 'hard', row: '11', col: 'A', code: D },
+  // Unlike the shoe game, total-dependent single-deck strategy hits 16 vs 9.
+  { table: 'hard', row: '15', col: '10', code: H },
+  { table: 'hard', row: '16', col: '9', code: H },
+  { table: 'soft', row: 'A,2', col: '4', code: D },
+  { table: 'soft', row: 'A,3', col: '4', code: D },
+  { table: 'soft', row: 'A,6', col: '2', code: D },
+  { table: 'pairs', row: '3,3', col: '8', code: Ph },
+  { table: 'pairs', row: '4,4', col: '4', code: Ph },
+  { table: 'pairs', row: '6,6', col: '2', code: P },
+  { table: 'pairs', row: '6,6', col: '7', code: Ph },
+  { table: 'pairs', row: '7,7', col: '8', code: Ph },
+  { table: 'pairs', row: '7,7', col: '10', code: Rs },
+]
+
+/** Wizard double-deck chart changes shared by S17 and H17. */
+const DOUBLE_DECK_DEVIATIONS: readonly CellPatch[] = [
+  { table: 'hard', row: '9', col: '2', code: D },
+  { table: 'hard', row: '11', col: 'A', code: D },
+  { table: 'hard', row: '16', col: '9', code: H },
+  { table: 'soft', row: 'A,3', col: '4', code: D },
+  { table: 'pairs', row: '6,6', col: '2', code: P },
+  { table: 'pairs', row: '6,6', col: '7', code: Ph },
+  { table: 'pairs', row: '7,7', col: '8', code: Ph },
+]
+
 // ---------------------------------------------------------------------------
 // Table construction
 // ---------------------------------------------------------------------------
@@ -141,13 +171,41 @@ function buildTable(
 ): BookTable {
   const cells: BookCode[][] = base.map((row) => row.slice())
 
+  const apply = (patch: CellPatch): void => {
+    if (patch.table !== kind) return
+    const r = rows.indexOf(patch.row)
+    const c = BOOK_COLS.indexOf(patch.col)
+    if (r >= 0 && c >= 0) cells[r][c] = patch.code
+  }
+
   if (rules.dealerHitsSoft17) {
-    for (const patch of H17_DEVIATIONS) {
-      if (patch.table !== kind) continue
-      const r = rows.indexOf(patch.row)
-      const c = BOOK_COLS.indexOf(patch.col)
-      if (r >= 0 && c >= 0) cells[r][c] = patch.code
+    for (const patch of H17_DEVIATIONS) apply(patch)
+  }
+
+  if (rules.decks === 1) {
+    for (const patch of SINGLE_DECK_DEVIATIONS) apply(patch)
+
+    // On the one-deck chart, 4s vs 5/6 split with DAS and double otherwise.
+    apply({ table: 'pairs', row: '4,4', col: '5', code: rules.doubleAfterSplit ? P : D })
+    apply({ table: 'pairs', row: '4,4', col: '6', code: rules.doubleAfterSplit ? P : D })
+
+    if (rules.dealerHitsSoft17) {
+      apply({ table: 'pairs', row: '7,7', col: 'A', code: Rh })
+      // 9s vs ace split only in the one-deck H17 DAS game; otherwise stand.
+      if (rules.doubleAfterSplit) apply({ table: 'pairs', row: '9,9', col: 'A', code: P })
     }
+  } else if (rules.decks === 2) {
+    for (const patch of DOUBLE_DECK_DEVIATIONS) apply(patch)
+
+    // With two decks/H17, surrendering 8s vs ace is only better when DAS is
+    // unavailable. With DAS, splitting remains the play.
+    if (rules.dealerHitsSoft17 && rules.lateSurrender && !rules.doubleAfterSplit) {
+      apply({ table: 'pairs', row: '8,8', col: 'A', code: Rh })
+    }
+  } else if (rules.dealerHitsSoft17 && rules.lateSurrender) {
+    // Four or more decks, H17: the late-surrender exception overrides the
+    // otherwise universal split of eights against an ace.
+    apply({ table: 'pairs', row: '8,8', col: 'A', code: Rh })
   }
 
   for (const row of cells) {

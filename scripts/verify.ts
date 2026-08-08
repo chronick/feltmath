@@ -2,15 +2,22 @@
 // Run: npx esbuild scripts/verify.ts --bundle --platform=node --format=esm \
 //        --outfile=/tmp/verify.mjs && node /tmp/verify.mjs
 
-import { fullComposition, RANKS } from '../src/shared/cards'
+import { emptyComposition, fullComposition, RANKS } from '../src/shared/cards'
 import type { Rank } from '../src/shared/cards'
 import { DEFAULT_RULES } from '../src/games/blackjack/types'
 import type { RulesConfig } from '../src/games/blackjack/types'
-import { computeOdds, dealerDistribution } from '../src/games/blackjack/odds'
+import {
+  canFullyFundDoubleAfterSplit,
+  computeOdds,
+  dealerDistribution,
+} from '../src/games/blackjack/odds'
+import { aiDecide } from '../src/games/blackjack/ai/aiPlayer'
 import { basicStrategy } from '../src/games/blackjack/strategy/basicStrategy'
+import { insuranceCost } from '../src/games/blackjack/ui/InsurancePrompt'
+import { formatMoney } from '../src/games/blackjack/ui/format'
 import {
   addChips, availableActions, doAction, declineInsurance, humanSeat, needsStep,
-  newGame, nextRound, setBet, startRound, step, unseenComposition,
+  newGame, nextRound, setBet, startRound, step, takeInsurance, unseenComposition,
 } from '../src/games/blackjack/engine/game'
 import type { GameState } from '../src/games/blackjack/types'
 
@@ -75,6 +82,27 @@ const dUncond = dealerDistribution('A', comp, rules, false)
 check('unconditioned pBlackjack ≈ 4/13', close(dUncond.pBlackjack, 4 / 13, 1e-9),
   dUncond.pBlackjack.toFixed(4))
 
+// A tiny shoe makes removal visible: with 10 up and only a 2 and a 10 unseen,
+// the ten hole stands on 20 while the deuce hole must draw the sole remaining
+// ten and bust. A fixed-frequency/replacement recursion cannot produce 50/50.
+{
+  const tiny = emptyComposition()
+  tiny['2'] = 1
+  tiny['10'] = 1
+  const d = dealerDistribution('10', tiny, s17, true)
+  check('dealer draws without replacement from live shoe',
+    close(d.p20, 0.5, 1e-12) && close(d.pBust, 0.5, 1e-12),
+    `p20=${d.p20.toFixed(6)} bust=${d.pBust.toFixed(6)}`)
+
+  const exhausted = emptyComposition()
+  exhausted['2'] = 1
+  const emergency = dealerDistribution('2', exhausted, s17, false)
+  const emergencySum = emergency.p17 + emergency.p18 + emergency.p19 + emergency.p20 +
+    emergency.p21 + emergency.pBlackjack + emergency.pBust
+  check('exhausted synthetic shoe still returns a normalized distribution',
+    close(emergencySum, 1, 1e-9), emergencySum.toFixed(12))
+}
+
 // --- odds: 16 vs 10 EVs (Wizard of Odds infinite-deck, post-peek) -----------
 {
   const cards = [
@@ -95,6 +123,10 @@ check('unconditioned pBlackjack ≈ 4/13', close(dUncond.pBlackjack, 4 / 13, 1e-
     [{ rank: a, suit: 'spades', id: 'x1' }, { rank: b, suit: 'hearts', id: 'x2' }] as never
   const full = { canHit: true, canStand: true, canDouble: true, canSplit: true, canSurrender: true }
   const noDouble = { ...full, canDouble: false }
+  const oneDeck = { ...rules, decks: 1 as const }
+  const twoDeck = { ...rules, decks: 2 as const }
+  const noDasTwoDeck = { ...twoDeck, doubleAfterSplit: false }
+  const hitSplitAces = { ...rules, hitSplitAces: true }
   const cases: Array<[string, Rank, Rank, Rank, typeof full, RulesConfig, string]> = [
     ['11 vs A doubles under H17', '6', '5', 'A', full, rules, 'double'],
     ['11 vs A hits under S17', '6', '5', 'A', full, s17, 'hit'],
@@ -113,11 +145,92 @@ check('unconditioned pBlackjack ≈ 4/13', close(dUncond.pBlackjack, 4 / 13, 1e-
     ['A,8 vs 6 H17 doubles', 'A', '8', '6', full, rules, 'double'],
     ['A,8 vs 6 S17 stands', 'A', '8', '6', full, s17, 'stand'],
     ['A,8 vs 5 stands', 'A', '8', '5', full, rules, 'stand'],
+    ['default 8,8 vs A surrenders', '8', '8', 'A', full, rules, 'surrender'],
+    ['8,8 vs A splits when surrender is unavailable', '8', '8', 'A',
+      { ...full, canSurrender: false }, rules, 'split'],
+    ['single-deck H17 16 vs 9 hits', '10', '6', '9', { ...full, canSplit: false }, oneDeck, 'hit'],
+    ['single-deck 9 vs 2 doubles', '5', '4', '2', { ...full, canSplit: false }, oneDeck, 'double'],
+    ['double-deck 9 vs 2 doubles', '5', '4', '2', { ...full, canSplit: false }, twoDeck, 'double'],
+    ['4-8-deck 9 vs 2 hits', '5', '4', '2', { ...full, canSplit: false }, rules, 'hit'],
+    ['double-deck H17 DAS 8,8 vs A splits', '8', '8', 'A', full, twoDeck, 'split'],
+    ['double-deck H17 no-DAS 8,8 vs A surrenders', '8', '8', 'A', full, noDasTwoDeck, 'surrender'],
+    ['six-deck unsplittable A,A with HSA hits vs 5', 'A', 'A', '5',
+      { ...full, canSplit: false }, hitSplitAces, 'hit'],
+    ['six-deck unsplittable A,A with HSA doubles vs 6', 'A', 'A', '6',
+      { ...full, canSplit: false }, hitSplitAces, 'double'],
+    ['single-deck unsplittable A,A with HSA doubles vs 5', 'A', 'A', '5',
+      { ...full, canSplit: false }, { ...hitSplitAces, decks: 1 }, 'double'],
+    ['unsplittable A,A with HSA hits vs 6 when double unavailable', 'A', 'A', '6',
+      { ...noDouble, canSplit: false }, hitSplitAces, 'hit'],
+    ['single-deck 8,7 vs 10 hits instead of inheriting shoe surrender', '8', '7', '10',
+      { ...full, canSplit: false }, oneDeck, 'hit'],
   ]
   for (const [label, a, b, up, ctx, rc, want] of cases) {
     const advice = basicStrategy(mk(a, b), up, rc, ctx)
     check(label, advice.action === want, `got ${advice.action}`)
   }
+
+  const brokeAfterSplit = basicStrategy(mk('4', '4'), '5', rules, full, false)
+  check('book does not assume unaffordable future DAS', brokeAfterSplit.action === 'hit',
+    `got ${brokeAfterSplit.action}`)
+
+  const odds = computeOdds(mk('4', '4'), '5', comp, rules, full, false)
+  check('split odds do not assume unaffordable future DAS', odds.best !== 'split', `got ${odds.best}`)
+  check('two bets left cannot fund both modeled post-split doubles',
+    !canFullyFundDoubleAfterSplit(1000, 500))
+  check('three bets left can fund both modeled post-split doubles',
+    canFullyFundDoubleAfterSplit(1500, 500))
+  check('exported AI decision respects unavailable future DAS',
+    aiDecide(mk('4', '4'), '5', rules, full, false) === 'hit')
+}
+
+// --- half-chip display -----------------------------------------------------
+{
+  check('money formatter preserves half chips', formatMoney(2.5) === '$2.50', formatMoney(2.5))
+  check('insurance prompt uses exactly half an odd bet', insuranceCost(5) === 2.5,
+    `${insuranceCost(5)}`)
+
+  const soloRules: RulesConfig = { ...rules, aiPlayers: 0 }
+  let insured = startRound(setBet(newGame(soloRules, 9001), 5))
+  const bankrollBeforeInsurance = humanSeat(insured).bankroll
+  insured = takeInsurance({ ...insured, phase: 'insurance' })
+  check('engine posts the same half-chip insurance amount shown by the prompt',
+    humanSeat(insured).insuranceBet === 2.5 &&
+      humanSeat(insured).bankroll === bankrollBeforeInsurance - 2.5,
+    `bet=${humanSeat(insured).insuranceBet} bankroll=${humanSeat(insured).bankroll}`)
+
+  // Force a completed two-card spot so settlement proves half-chip surrender
+  // accounting, not just formatting. The dealer already has a standing 20.
+  let surrendered = startRound(setBet(newGame(soloRules, 9002), 5))
+  surrendered = {
+    ...surrendered,
+    phase: 'playerTurns',
+    activeSeatIndex: 0,
+    dealer: {
+      cards: [
+        { rank: '10', suit: 'clubs', id: 'forced-up' },
+        { rank: 'K', suit: 'diamonds', id: 'forced-hole' },
+      ],
+      holeRevealed: false,
+    },
+    seats: surrendered.seats.map((seat) => ({
+      ...seat,
+      activeHandIndex: 0,
+      hands: [{
+        ...seat.hands[0],
+        cards: [
+          { rank: '10', suit: 'spades', id: 'forced-player-1' },
+          { rank: '6', suit: 'hearts', id: 'forced-player-2' },
+        ],
+      }],
+    })),
+  }
+  surrendered = doAction(surrendered, 'surrender')
+  while (needsStep(surrendered)) surrendered = step(surrendered)
+  check('surrender settlement records an exact half loss',
+    surrendered.phase === 'settlement' && surrendered.stats.net === -2.5 &&
+      surrendered.stats.handsLost === 1 && humanSeat(surrendered).bankroll === 997.5,
+    `phase=${surrendered.phase} net=${surrendered.stats.net} bankroll=${humanSeat(surrendered).bankroll}`)
 }
 
 // --- engine fuzz: autoplay 300 rounds by the book ----------------------------
@@ -197,7 +310,13 @@ check('unconditioned pBlackjack ≈ 4/13', close(dUncond.pBlackjack, 4 / 13, 1e-
     const seat = human()
     const hand = seat.hands[seat.activeHandIndex]
     const up = state.dealer.cards[0].rank
-    const advice = basicStrategy(hand.cards, up, state.rules, ctx)
+    const advice = basicStrategy(
+      hand.cards,
+      up,
+      state.rules,
+      ctx,
+      !ctx.canSplit || canFullyFundDoubleAfterSplit(seat.bankroll, hand.bet),
+    )
     const before = state
     state = doAction(state, advice.action)
     humanActions++

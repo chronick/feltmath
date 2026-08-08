@@ -110,8 +110,13 @@ export function basicStrategy(
   dealerUp: Rank,
   rules: RulesConfig,
   ctx: ActionContext,
+  /** Can this bankroll fund the split plus both possible post-split doubles? */
+  canFundDoubleAfterSplit: boolean = rules.doubleAfterSplit,
 ): StrategyAdvice {
-  const tables = bookTables(rules)
+  const effectiveRules = rules.doubleAfterSplit && !canFundDoubleAfterSplit
+    ? { ...rules, doubleAfterSplit: false }
+    : rules
+  const tables = bookTables(effectiveRules)
   const col = dealerColumn(dealerUp)
   const { total, soft } = handTotal(cards)
 
@@ -157,7 +162,15 @@ export function basicStrategy(
 
   // --- normal lookup ------------------------------------------------------
   const pairCell = pairRank !== null ? pairCellOf(tables, pairRank, col) : null
-  const totalCell = totalCellOf(tables, total, soft, col)
+  let totalCell = totalCellOf(tables, total, soft, col)
+
+  // Wizard's split-limit exception: if A,A cannot be split again but drawing
+  // to split aces is allowed, treat it as soft 12. Double against 6 in shoe
+  // games and 5/6 with one or two decks; the D code falls back to hit.
+  const unsplittableAcesDouble = col === '6' || (rules.decks <= 2 && col === '5')
+  if (pairRank === 'A' && !can.split && rules.hitSplitAces && unsplittableAcesDouble) {
+    totalCell = { ...totalCell, code: 'D' }
+  }
 
   // The unconstrained book answer is the pairs row whenever the hand IS a pair,
   // even if this seat is out of splits — that's what "the book says" means.
@@ -166,14 +179,19 @@ export function basicStrategy(
   // The cell we actually play from: the pairs row only while splitting is on
   // the table, otherwise the hand is re-read as a plain hard/soft total.
   const cell = pairCell && can.split ? pairCell : totalCell
-  const action = resolve(cell.code, can)
+  // The 4+-deck H17 surrender exception for 8s falls back to the normal split
+  // when surrender is not available for this otherwise splittable hand.
+  const action = cell.table === 'pairs' && cell.row === '8,8' && cell.code === 'Rh' &&
+    !can.surrender && can.split
+    ? 'split'
+    : resolve(cell.code, can)
 
   return {
     action,
     bookAction,
     situation: situationText(cell, total, soft, pairRank),
     cell: { table: cell.table, row: cell.row, col },
-    explanation: explain({ cell, total, soft, col, rules, action, bookAction, pairRank }),
+    explanation: explain({ cell, total, soft, col, rules: effectiveRules, action, bookAction, pairRank }),
   }
 }
 
@@ -275,6 +293,10 @@ function unavailableNote(x: ExplainCtx): string {
 
 function offChartReason(x: ExplainCtx): string {
   if (x.soft) {
+    if (x.cell.code === 'D') {
+      return `A pair of aces that can't be re-split is a soft 12. Because this game lets you ` +
+        `draw to split aces, double against the dealer's weak ${x.col} when you can; otherwise hit.`
+    }
     return `A soft 12 sits below where the chart starts — you can't bust, and you can't stand on 12, ` +
       `so take a card.`
   }
@@ -336,6 +358,10 @@ function pairReason(x: ExplainCtx): string {
           `looks like. Two 9s give you two runs at 19 or 20 instead of one hand that's already behind.`
 
     case '8,8':
+      if (code === 'Rh') {
+        return `Against an ace in an H17 game, even two fresh 8s lose often enough that late ` +
+          `surrender saves more than splitting. Take half the bet back.`
+      }
       return isBustCard(col)
         ? `Sixteen is the worst hand in blackjack; two 8s starting fresh beat one 16 — especially ` +
           `against a ${col} that busts about ${bust}% of the time.`

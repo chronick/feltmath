@@ -1,27 +1,42 @@
-/* Blackjack Trainer service worker.
+/* Feltmath service worker.
  *
- * Deliberately minimal: one versioned cache, network-first for navigations
- * (so a deploy is picked up immediately when online), cache-first for static
- * assets (which Vite content-hashes, so a hit is always correct). Same-origin
- * GET only — never touches cross-origin or mutating requests.
+ * Network-first for navigations (so a deploy is picked up immediately when
+ * online), cache-first for content-hashed static assets. The Vite build
+ * manifest lets installation cache entry points and lazy chunks before the
+ * app is expected to work offline. Same-origin GET only.
  *
- * Bump CACHE_VERSION to invalidate everything on the next activation.
+ * The production build replaces CACHE_VERSION with a hash of Vite's manifest,
+ * so a changed bundle automatically installs a fresh cache.
  */
 
-const CACHE_VERSION = 'v1'
-const CACHE_NAME = `bjt-${CACHE_VERSION}`
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg']
+// Replaced with a manifest hash by the production build. Keeping the template
+// value valid JavaScript also makes this file easy to lint directly.
+const CACHE_VERSION = '__FELTMATH_BUILD_VERSION__'
+const CACHE_NAME = `feltmath-${CACHE_VERSION}`
+const BUILD_ASSETS = /*__FELTMATH_BUILD_ASSETS__*/ []
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon.svg',
+  './icon-180.png',
+  './icon-192.png',
+  './icon-512.png',
+]
+
+async function cacheResource(cache, url) {
+  const response = await fetch(url, { cache: 'reload' })
+  if (!response.ok) throw new Error(`Unable to precache ${url}: ${response.status}`)
+  await cache.put(url, response)
+}
+
+async function precache() {
+  const cache = await caches.open(CACHE_NAME)
+  await Promise.all([...APP_SHELL, ...BUILD_ASSETS].map((url) => cacheResource(cache, url)))
+}
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .catch(() => {
-        /* a missing shell entry must not block installation */
-      })
-      .then(() => self.skipWaiting()),
-  )
+  event.waitUntil(precache().then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (event) => {

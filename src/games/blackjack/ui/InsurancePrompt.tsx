@@ -9,8 +9,13 @@ export interface InsurancePromptProps {
   onDecline: () => void
 }
 
+/** Insurance is exactly half the main wager, including half-chip amounts. */
+export function insuranceCost(mainBet: number): number {
+  return Number.isFinite(mainBet) ? Math.max(0, mainBet / 2) : 0
+}
+
 export function InsurancePrompt({ mainBet, bankroll, onTake, onDecline }: InsurancePromptProps) {
-  const cost = Math.floor(mainBet / 2)
+  const cost = insuranceCost(mainBet)
   const affordable = cost > 0 && cost <= bankroll
 
   return (

@@ -30,6 +30,7 @@ import type { Card, Composition, Rank } from '../../../shared/cards'
 import { SUIT_SYMBOL, buildDecks, emptyComposition } from '../../../shared/cards'
 import { shuffled } from '../../../shared/rng'
 import { AI_NAMES, aiBet, aiDecide } from '../ai/aiPlayer'
+import { canFullyFundDoubleAfterSplit } from '../odds'
 import { basicStrategy } from '../strategy/basicStrategy'
 import { cardValue, handLabel, handTotal, isBlackjack } from './hand'
 
@@ -733,7 +734,16 @@ function playAi(state: GameState): GameState {
   const seat = state.seats[state.activeSeatIndex]
   const hand = seat.hands[seat.activeHandIndex]
   const ctx = actionsFor(state, seat, hand)
-  const choice = sanitizeAction(aiDecide(hand.cards, dealerUpRank(state), state.rules, ctx), ctx)
+  const choice = sanitizeAction(
+    aiDecide(
+      hand.cards,
+      dealerUpRank(state),
+      state.rules,
+      ctx,
+      canFundDoubleAfterSplit(seat, hand, ctx),
+    ),
+    ctx,
+  )
   return applyActiveAction(state, choice)
 }
 
@@ -817,6 +827,15 @@ function actionsFor(state: GameState, seat: SeatState, hand: HandState): ActionC
   const canSurrender = rules.lateSurrender && twoCards && !hand.fromSplit
 
   return { canHit: true, canStand: true, canDouble, canSplit, canSurrender }
+}
+
+/** Can the seat fund the split plus both doubles modeled by split EV? */
+function canFundDoubleAfterSplit(
+  seat: SeatState,
+  hand: HandState,
+  ctx: ActionContext,
+): boolean {
+  return !ctx.canSplit || canFullyFundDoubleAfterSplit(seat.bankroll, hand.bet)
 }
 
 /** What the HUMAN active hand may do right now; NO_ACTIONS when it isn't their turn. */
@@ -958,7 +977,14 @@ function scoreHint(
   action: Action,
 ): GameState {
   if (countActions(ctx) < 2) return state // forced play, not a decision
-  const advice = basicStrategy(hand.cards, dealerUpRank(state), state.rules, ctx)
+  const seat = state.seats[state.activeSeatIndex]
+  const advice = basicStrategy(
+    hand.cards,
+    dealerUpRank(state),
+    state.rules,
+    ctx,
+    canFundDoubleAfterSplit(seat, hand, ctx),
+  )
   return {
     ...state,
     stats: {

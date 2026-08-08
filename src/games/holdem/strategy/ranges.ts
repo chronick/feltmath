@@ -317,6 +317,53 @@ const BB_DEFEND: readonly string[] = [
 ]
 
 // ---------------------------------------------------------------------------
+// Facing one or more limpers
+// ---------------------------------------------------------------------------
+
+/**
+ * A separate 100bb isolation/overlimp baseline. A limped pot is not unopened:
+ * the dead money rewards a value-heavy isolation raise, while small pairs and
+ * suited connected hands can overlimp. Keeping this separate from the RFI
+ * grids prevents an unopened range from being presented as limper strategy.
+ *
+ * The big blind uses the same raise core and checks everything else for free.
+ */
+const ISO_RAISE_EARLY = new Set<ComboKey>([
+  'AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88',
+  'AKs', 'AQs', 'AJs', 'ATs', 'KQs', 'KJs', 'QJs', 'JTs',
+  'AKo', 'AQo', 'AJo', 'KQo',
+])
+
+const ISO_RAISE_LATE = new Set<ComboKey>([
+  'AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88', '77', '66',
+  'AKs', 'AQs', 'AJs', 'ATs', 'A9s', 'A8s',
+  'KQs', 'KJs', 'KTs', 'QJs', 'QTs', 'JTs', 'T9s',
+  'AKo', 'AQo', 'AJo', 'ATo', 'KQo', 'KJo', 'QJo',
+])
+
+const OVERLIMP = new Set<ComboKey>([
+  '77', '66', '55', '44', '33', '22',
+  'A7s', 'A6s', 'A5s', 'A4s', 'A3s', 'A2s',
+  'K9s', 'Q9s', 'J9s', 'T8s', '98s', '87s', '76s', '65s', '54s',
+])
+
+function limperCells(position: Position): Record<ComboKey, RangeAction> {
+  const cells: Record<ComboKey, RangeAction> = {}
+  const raise = position === 'CO' || position === 'BTN' ? ISO_RAISE_LATE : ISO_RAISE_EARLY
+  for (let row = 0; row < CHART_RANKS.length; row++) {
+    for (let col = 0; col < CHART_RANKS.length; col++) {
+      const combo = comboKeyAt(row, col)
+      cells[combo] = raise.has(combo)
+        ? 'raise'
+        : position === 'BB' || OVERLIMP.has(combo)
+          ? 'call'
+          : 'fold'
+    }
+  }
+  return cells
+}
+
+// ---------------------------------------------------------------------------
 // Chart construction
 // ---------------------------------------------------------------------------
 
@@ -348,6 +395,19 @@ export function rfiChart(position: Position): RangeChart {
   }
 }
 
+/** A dedicated isolation/overlimp chart; never substitute an unopened RFI. */
+export function vsLimpersChart(position: Position): RangeChart {
+  const key = `limpers:${position}`
+  const cached = chartCache.get(key)
+  if (cached) return cached
+  const situation = position === 'BB'
+    ? 'Big blind vs limpers (raise or check)'
+    : 'Facing limpers (isolate, overlimp, or fold)'
+  const chart: RangeChart = { position, situation, cells: limperCells(position) }
+  chartCache.set(key, chart)
+  return chart
+}
+
 /**
  * Facing exactly one raise. Bucketed by whether the hero will have position on
  * the raiser after the flop — that, not the exact seat, is what decides
@@ -358,7 +418,8 @@ export function vsOpenChart(heroPosition: Position): RangeChart {
   if (heroPosition === 'BB') {
     return chartOf('vs:BB', heroPosition, 'BB defending vs an open', BB_DEFEND)
   }
-  if (heroPosition === 'BTN' || heroPosition === 'CO') {
+  // HJ can only face a first raise from UTG, so it has position on the opener.
+  if (heroPosition === 'BTN' || heroPosition === 'CO' || heroPosition === 'HJ') {
     return chartOf(`vs:ip:${heroPosition}`, heroPosition, 'Vs an open, in position', VS_OPEN_IP)
   }
   return chartOf(`vs:oop:${heroPosition}`, heroPosition, 'Vs an open, out of position', VS_OPEN_OOP)

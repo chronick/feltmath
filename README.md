@@ -11,24 +11,34 @@ primitives in `src/shared/`) so more games can land later.
 - **Configurable rules** — 1/2/4/6/8 decks, H17/S17, 3:2 vs 6:5, DAS,
   double restrictions, resplit aces, penetration
 - **Free-play betting** — chips, bankroll, one-tap rebuy; stakes stay fun
-- **Live odds** — exact dealer final-total distribution from the *actual
-  remaining shoe composition*, win/push/lose if you stand, and EV per action
-- **Hint + book** — basic-strategy advice with plain-English reasoning and a
-  color-coded strategy chart that highlights your exact spot
+- **Blackjack odds** — removal-aware dealer final-total distribution from the
+  actual remaining shoe, stand outcomes, and clearly labelled action-EV models
+- **Hold'em equity** — exact enumeration when cheap, seeded Monte Carlo versus
+  random hands otherwise, with pot odds and sampling uncertainty
+- **Hint + book** — deck- and rule-aware blackjack basic strategy plus solid
+  100bb 6-max Hold'em baselines, both with plain-English reasoning
 - **AI table mates** — up to 6 companion players who play perfect book
 - **Trainer stats** — win rate, net, and how often you matched the book
-- **PWA** — installable on iOS/Android, offline-capable, dealing animations
+- **PWA** — installable on iOS/Android; both lazy-loaded games are precached
+  for offline use
+
+Blackjack uses a strict same-rank split house rule: `K,K` may split, while
+`K,10` may not.
 
 ## Dev
 
 ```bash
 npm install
 npm run dev        # http://localhost:5199
+npm test           # blackjack + Hold'em rule/evaluator regression suites
+npm run typecheck
 npm run build      # type-check + production build to dist/
 ```
 
-No runtime dependencies beyond React. Odds are computed analytically
-(memoized recursion over the dealer's draw tree), not by simulation.
+No runtime dependencies beyond React. Blackjack dealer probabilities use
+memoized without-replacement recursion; action EVs include documented teaching
+approximations. Hold'em enumerates cheap heads-up spots exactly and uses seeded
+Monte Carlo for larger state spaces.
 
 ## Architecture
 
@@ -42,6 +52,12 @@ src/
     odds/           # dealer distribution + per-action EV
     ai/             # AI seat behavior (plays the book)
     ui/             # React components
+  games/holdem/
+    engine/         # betting state machine, pots, evaluator
+    strategy/       # preflop ranges + heuristic coaching
+    odds/           # exact/Monte Carlo equity + pot odds
+    ui/             # React components
 ```
 
-`CONTRACT.md` documents the module APIs and the engine state machine.
+`CONTRACT.md` and `CONTRACT-HOLDEM.md` document the module APIs and engine state
+machines.

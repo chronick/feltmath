@@ -199,6 +199,10 @@ export function SettingsModal({ rules, canApplyNow, onApply, onClose }: Settings
           />
         </Row>
 
+        <Row label="Ten-value pairs" hint="House rule">
+          <span className="smallcaps">Same rank only</span>
+        </Row>
+
         <Row label="Double on" hint="Which two-card totals may double">
           <Segmented
             label="Double on"

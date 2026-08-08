@@ -56,6 +56,7 @@ export function OddsPanel({ odds, open, onToggle, bet }: OddsPanelProps) {
           <div className="odds__block">
             <div className="odds__blockhead">
               <span className="smallcaps">Dealer finishes on</span>
+              <span className="odds__caption">exact remaining shoe</span>
             </div>
             <ul className="dist">
               {distributionRows(odds).map((row) => (
@@ -109,8 +110,8 @@ export function OddsPanel({ odds, open, onToggle, bet }: OddsPanelProps) {
 
           <div className="odds__block">
             <div className="odds__blockhead">
-              <span className="smallcaps">Expected value</span>
-              <span className="odds__caption">per $1 · bet {formatMoney(bet)}</span>
+              <span className="smallcaps">Modeled action EV</span>
+              <span className="odds__caption">approximate player draws · per $1 · bet {formatMoney(bet)}</span>
             </div>
             <ul className="evlist">
               {odds.evs.map((entry) => {
