@@ -1,9 +1,9 @@
-# blackjack-trainer
+# Feltmath
 
-A practice-focused casino card trainer, built as an installable PWA. Blackjack
-is the first game; the architecture is multi-game (`src/games/<game>/` over
-shared card/chip primitives in `src/shared/`) so hold'em and friends can land
-later.
+**feltmath.com** — the math of the felt. A practice-focused casino card
+trainer, built as an installable PWA. Blackjack and No-Limit Texas Hold'em;
+the architecture is multi-game (`src/games/<game>/` over shared card/chip
+primitives in `src/shared/`) so more games can land later.
 
 ## Features
 

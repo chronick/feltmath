@@ -1,7 +1,7 @@
 {
-  "name": "Blackjack Trainer",
-  "short_name": "Blackjack",
-  "description": "Learn basic strategy at a full blackjack table — live odds, the book, and honest feedback on every decision.",
+  "name": "Feltmath",
+  "short_name": "Feltmath",
+  "description": "The math of the felt — casino card trainer with live odds, the book, and honest feedback on every decision. Blackjack and Texas hold'em.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
