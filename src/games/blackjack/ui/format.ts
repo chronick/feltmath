@@ -15,17 +15,9 @@ export function formatSignedMoney(amount: number): string {
   return `${sign}$${Math.abs(rounded).toLocaleString('en-US')}`
 }
 
-export function formatPct(p: number, digits = 1): string {
-  if (!Number.isFinite(p)) return '—'
-  return `${(p * 100).toFixed(digits)}%`
-}
-
-/** EV in units of the initial bet, e.g. "+0.235" / "−0.540". */
-export function formatEV(ev: number): string {
-  if (!Number.isFinite(ev)) return '—'
-  const sign = ev >= 0 ? '+' : MINUS
-  return `${sign}${Math.abs(ev).toFixed(3)}`
-}
+// NOTE: percentage and EV formatting live in `../odds` (formatPct / formatEV)
+// so the numbers the odds engine produces are rendered by the module that
+// owns them. Don't add a second implementation here.
 
 export function actionLabel(action: Action): string {
   switch (action) {

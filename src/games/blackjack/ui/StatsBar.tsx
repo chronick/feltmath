@@ -1,6 +1,7 @@
-import type { SessionStats } from '../types'
 import { ChevronIcon } from '../../../shared/ui/Icons'
-import { formatPct, formatSignedMoney } from './format'
+import { formatPct } from '../odds'
+import type { SessionStats } from '../types'
+import { formatSignedMoney } from './format'
 
 export interface StatsBarProps {
   stats: SessionStats
@@ -27,7 +28,7 @@ export function StatsBar({ stats, open, onToggle }: StatsBarProps) {
     {
       label: 'Book match',
       value:
-        bookMatch === null ? '—' : `${formatPct(bookMatch, 0)} (${stats.hintsMatched}/${stats.hintsTotal})`,
+        bookMatch === null ? '—' : `${formatPct(bookMatch)} (${stats.hintsMatched}/${stats.hintsTotal})`,
     },
   ]
 

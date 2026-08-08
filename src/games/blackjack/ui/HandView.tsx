@@ -62,14 +62,16 @@ export function HandView({
       </div>
 
       <div className="hand__foot">
-        <span
-          className="hand__total num"
-          data-bust={bust ? 'true' : 'false'}
-          data-natural={natural ? 'true' : 'false'}
-          title={handLabel(hand.cards)}
-        >
-          {totalText}
-        </span>
+        {hand.cards.length > 0 && (
+          <span
+            className="hand__total num"
+            data-bust={bust ? 'true' : 'false'}
+            data-natural={natural ? 'true' : 'false'}
+            title={handLabel(hand.cards)}
+          >
+            {totalText}
+          </span>
+        )}
 
         {handCount > 1 && (
           <span className="hand__tag">

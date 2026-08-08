@@ -54,6 +54,7 @@ export function SeatView({
               active={isActiveSeat && index === seat.activeHandIndex && !hand.finished}
               handIndex={index}
               handCount={seat.hands.length}
+              settled={settled}
             />
           ))
         ) : (

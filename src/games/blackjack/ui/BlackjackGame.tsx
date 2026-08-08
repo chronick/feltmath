@@ -237,14 +237,14 @@ export function BlackjackGame() {
     status = acting && acting.kind === 'ai' ? `${acting.name} is playing…` : 'Resolving hand…'
   } else if (state.phase === 'insurance') status = 'Insurance decision'
 
+  // `advice.situation` already speaks the book's language ("Hard 16 vs 10",
+  // where any ten-value upcard reads as 10); fall back to the raw hand label.
+  const situation =
+    advice?.situation ?? (hand && upcard ? `${handLabel(hand.cards)} vs ${upcard.rank}` : 'Your move')
   const caption =
-    hand && upcard
-      ? `${handLabel(hand.cards)} vs ${upcard.rank}${
-          human.hands.length > 1
-            ? ` · Hand ${human.activeHandIndex + 1} of ${human.hands.length}`
-            : ''
-        }`
-      : 'Your move'
+    human.hands.length > 1
+      ? `${situation} · Hand ${human.activeHandIndex + 1} of ${human.hands.length}`
+      : situation
 
   const activeBet = hand?.bet ?? human.pendingBet
   const insuranceMainBet = human.hands[0]?.bet ?? human.pendingBet

@@ -123,6 +123,10 @@ button {
   cursor: pointer;
   border: none;
   background: none;
+  /* fast, selection-free taps on touch devices */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button:disabled {

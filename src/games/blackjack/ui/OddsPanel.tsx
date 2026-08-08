@@ -1,8 +1,9 @@
 import { ChartIcon } from '../../../shared/ui/Icons'
 import { cssVars } from '../../../shared/ui/cssVars'
+import { formatEV, formatPct } from '../odds'
 import type { OddsReport } from '../types'
 import { Panel } from './Panel'
-import { actionLabel, formatEV, formatMoney, formatPct } from './format'
+import { actionLabel, formatMoney } from './format'
 
 export interface OddsPanelProps {
   odds: OddsReport | null
