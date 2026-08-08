@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Casino chips — SVG coins, overlapping stacks, toss-in animation
+   ========================================================================== */
+
+.chipstack {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chipstack__row {
+  display: inline-flex;
+  align-items: center;
+  padding-right: 2px;
+}
+
+.chipstack__slot {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  animation: chip-toss 300ms var(--ease-deal) both;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+}
+
+.chipstack__slot + .chipstack__slot {
+  margin-left: -9px;
+}
+
+.chipstack__slot[data-clickable='true'] {
+  cursor: pointer;
+  transition: transform 110ms var(--ease-out);
+}
+
+.chipstack__slot[data-clickable='true']:hover,
+.chipstack__slot[data-clickable='true']:focus-visible {
+  transform: translateY(-4px);
+}
+
+.chipstack__slot[data-clickable='true']:active {
+  transform: translateY(0) scale(0.94);
+}
+
+.chipstack__more {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  margin-left: 4px;
+}
+
+.chipstack__total {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--gold-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.chipstack--sm .chipstack__total {
+  font-size: 11px;
+}
+
+@keyframes chip-toss {
+  from {
+    transform: translate(18px, -34px) rotate(-40deg) scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0) rotate(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chipstack__slot {
+    animation: none;
+  }
+  .chipstack__slot[data-clickable='true']:hover,
+  .chipstack__slot[data-clickable='true']:focus-visible {
+    transform: none;
+  }
+}

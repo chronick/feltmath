@@ -1,0 +1,315 @@
+/* ==========================================================================
+   Blackjack Trainer — design tokens + base + multi-game app shell
+   Casino-noir: deep felt green, gold accents, glassy dark panels.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- felt --------------------------------------------------------- */
+  --felt-hi: #12604a;
+  --felt-mid: #0e4d38;
+  --felt-lo: #081f17;
+  --felt-edge: #04110b;
+
+  /* ---- accents ------------------------------------------------------ */
+  --gold: #d4af37;
+  --gold-soft: #ecd484;
+  --gold-line: rgba(212, 175, 55, 0.26);
+  --gold-glow: rgba(212, 175, 55, 0.45);
+
+  /* ---- text --------------------------------------------------------- */
+  --text: #f4f0e4;
+  --text-2: #c1cec5;
+  --text-3: #8a998f;
+
+  /* ---- semantic ----------------------------------------------------- */
+  --win: #4fc98a;
+  --lose: #e8695a;
+  --push: #e2d093;
+  --warn: #e2a33f;
+
+  /* ---- chips -------------------------------------------------------- */
+  --chip-red: #c0392b;
+  --chip-green: #16794f;
+  --chip-blue: #2c3e50;
+  --chip-purple: #7d4fa8;
+
+  /* ---- surfaces ----------------------------------------------------- */
+  --panel: rgba(8, 20, 16, 0.72);
+  --panel-solid: #0a1d16;
+  --panel-hi: rgba(24, 48, 38, 0.66);
+  --hair: rgba(212, 175, 55, 0.18);
+  --hair-2: rgba(255, 255, 255, 0.09);
+
+  --shadow-card: 0 5px 12px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-panel: 0 12px 34px rgba(0, 0, 0, 0.5);
+  --shadow-btn: 0 2px 0 rgba(0, 0, 0, 0.35);
+
+  /* ---- geometry ----------------------------------------------------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --tap: 44px;
+
+  --card-w: 64px;
+  --card-h: 92px;
+
+  /* deal origin — how far a card flies from the shoe (up + to the right).
+     Table regions override these; cards inherit, never declare. */
+  --deal-x: 130px;
+  --deal-y: -100px;
+
+  /* ---- motion ------------------------------------------------------- */
+  --ease-deal: cubic-bezier(0.2, 0.86, 0.28, 1.12);
+  --ease-out: cubic-bezier(0.22, 0.75, 0.3, 1);
+  --dur-deal: 380ms;
+  --dur-flip: 500ms;
+
+  /* ---- type --------------------------------------------------------- */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@media (min-width: 900px) {
+  :root {
+    --card-w: 76px;
+    --card-h: 110px;
+  }
+}
+
+/* short landscape phones: shrink the felt furniture */
+@media (orientation: landscape) and (max-height: 560px) {
+  :root {
+    --card-w: 50px;
+    --card-h: 72px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  background:
+    radial-gradient(120% 90% at 50% 0%, #10402f 0%, #071a13 55%, var(--felt-edge) 100%);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold-soft);
+  outline-offset: 2px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.smallcaps {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Buttons (shared)
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--hair-2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-btn);
+  transition: transform 90ms var(--ease-out), filter 120ms var(--ease-out),
+    background-color 120ms var(--ease-out);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+.btn:disabled {
+  opacity: 0.34;
+  box-shadow: none;
+}
+
+.btn--gold {
+  background: linear-gradient(180deg, #e6c65c, #b58f22);
+  border-color: rgba(0, 0, 0, 0.3);
+  color: #22190a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.btn--ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--hair);
+  color: var(--text-2);
+}
+
+.btn--quiet {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--hair-2);
+  color: var(--text-2);
+}
+
+.btn--icon {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--hair-2);
+  color: var(--text-2);
+}
+
+.btn--icon[aria-pressed='true'],
+.btn--icon.is-on {
+  color: var(--gold-soft);
+  border-color: var(--gold-line);
+  background: rgba(212, 175, 55, 0.13);
+}
+
+/* ==========================================================================
+   App shell (multi-game)
+   ========================================================================== */
+
+.app {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  overflow: hidden;
+}
+
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 5px;
+  padding-top: calc(4px + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--hair);
+  background: linear-gradient(180deg, rgba(3, 12, 8, 0.92), rgba(3, 12, 8, 0.55));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.appbar__mark {
+  color: var(--gold);
+  font-size: 15px;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px var(--gold-glow));
+}
+
+.appbar__games {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.appbar__game {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.appbar__game.is-active {
+  color: var(--gold-soft);
+  background: rgba(212, 175, 55, 0.12);
+  box-shadow: inset 0 0 0 1px var(--gold-line);
+}
+
+.appbar__tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* ==========================================================================
+   Reduced motion — kill transforms, keep state changes legible
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
+}

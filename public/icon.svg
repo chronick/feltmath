@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="bjt-icon-title">
+  <title id="bjt-icon-title">Blackjack Trainer</title>
+
+  <defs>
+    <radialGradient id="felt" cx="50%" cy="26%" r="80%">
+      <stop offset="0" stop-color="#14684f" />
+      <stop offset="52%" stop-color="#0c4433" />
+      <stop offset="100%" stop-color="#061a12" />
+    </radialGradient>
+
+    <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffdf6" />
+      <stop offset="1" stop-color="#ece5d5" />
+    </linearGradient>
+
+    <pattern id="lattice" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M-4 4 L4 -4 M0 18 L18 0 M14 22 L22 14" stroke="#d4af37" stroke-opacity=".34" stroke-width="2.4" />
+      <path d="M-4 14 L4 22 M0 0 L18 18 M14 -4 L22 4" stroke="#d4af37" stroke-opacity=".34" stroke-width="2.4" />
+    </pattern>
+  </defs>
+
+  <!-- felt -->
+  <rect width="512" height="512" rx="112" fill="url(#felt)" />
+
+  <!-- gold betting arc, kept inside the maskable safe zone -->
+  <circle cx="256" cy="264" r="166" fill="none" stroke="#d4af37" stroke-opacity=".22" stroke-width="6" />
+
+  <!-- face-down card, fanned behind -->
+  <g transform="rotate(-19 256 268) translate(-36 -8)">
+    <rect x="176" y="157" width="160" height="222" rx="18" fill="#0d4a37" />
+    <rect x="176" y="157" width="160" height="222" rx="18" fill="url(#lattice)" />
+    <rect x="176" y="157" width="160" height="222" rx="18" fill="none" stroke="#d4af37" stroke-opacity=".62" stroke-width="4" />
+    <rect x="191" y="172" width="130" height="192" rx="10" fill="none" stroke="#d4af37" stroke-opacity=".5" stroke-width="3" />
+  </g>
+
+  <!-- ace of spades, front -->
+  <g transform="rotate(9 256 268) translate(28 8)">
+    <rect x="176" y="157" width="160" height="222" rx="18" fill="url(#face)" />
+    <rect x="176" y="157" width="160" height="222" rx="18" fill="none" stroke="#0b1f17" stroke-opacity=".38" stroke-width="3" />
+    <rect x="186" y="167" width="140" height="202" rx="11" fill="none" stroke="#d4af37" stroke-opacity=".72" stroke-width="2.5" />
+
+    <!-- corner rank -->
+    <g transform="translate(193 175) scale(.86)" fill="none" stroke="#14181b" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 44 L20 3" />
+      <path d="M36 44 L20 3" />
+      <path d="M11 28 L29 28" />
+    </g>
+
+    <!-- centre pip -->
+    <g transform="translate(213 220) scale(.86)" fill="#14181b">
+      <path d="M50 8 C50 8 88 36 88 56 C88 69 79 78 68 78 C61 78 55 74.5 52 69.5 L58.5 92 L41.5 92 L48 69.5 C45 74.5 39 78 32 78 C21 78 12 69 12 56 C12 36 50 8 50 8 Z" />
+    </g>
+  </g>
+</svg>

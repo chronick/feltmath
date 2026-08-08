@@ -1,0 +1,110 @@
+/* ==========================================================================
+   Modal shell — glassy dark sheet, mobile bottom-sheet feel, desktop dialog
+   ========================================================================== */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(2, 8, 6, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: modal-fade 160ms var(--ease-out) both;
+}
+
+.modal__sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 620px;
+  max-height: 92dvh;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  border: 1px solid var(--hair);
+  border-bottom: none;
+  background: linear-gradient(180deg, rgba(14, 34, 26, 0.97), rgba(6, 17, 12, 0.98));
+  box-shadow: var(--shadow-panel);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: modal-rise 220ms var(--ease-out) both;
+  overflow: hidden;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 10px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.modal__sub {
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+}
+
+.modal__close {
+  margin-left: auto;
+}
+
+.modal__body {
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 14px 16px 18px;
+}
+
+.modal__foot {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hair);
+  background: rgba(4, 12, 9, 0.6);
+}
+
+.modal__foot .btn {
+  flex: 1;
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (min-width: 700px) {
+  .modal {
+    align-items: center;
+  }
+
+  .modal__sheet {
+    border-radius: var(--r-lg);
+    border-bottom: 1px solid var(--hair);
+    max-height: 86dvh;
+  }
+}
