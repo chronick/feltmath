@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BookIcon, GearIcon } from '../../../shared/ui/Icons'
+import { useHotkeyLayout } from '../../../shared/ui/hotkeyLayout'
 import { useHotkeys } from '../../../shared/ui/useHotkeys'
 import type { HotkeyMap } from '../../../shared/ui/useHotkeys'
 import { CHIP_DENOMS } from '../../../shared/ui/ChipStack'
@@ -40,6 +41,7 @@ import { BookModal } from './BookModal'
 import { EventLog } from './EventLog'
 import { HintCard } from './HintCard'
 import { InsurancePrompt } from './InsurancePrompt'
+import { blackjackKeys } from './keys'
 import { OddsPanel } from './OddsPanel'
 import { SettingsModal } from './SettingsModal'
 import { SettlementBar } from './SettlementBar'
@@ -258,6 +260,8 @@ export function BlackjackGame() {
   // Rebuilt every render (cheap); useHotkeys reads it through a ref. Modals
   // own the keyboard while open: settings gets nothing (form fields + Esc),
   // the book keeps only its own toggle.
+  const layout = useHotkeyLayout()
+  const keys = blackjackKeys(layout)
   const hotkeys = useMemo<HotkeyMap>(() => {
     if (settingsOpen) return {}
     if (bookOpen) return { b: () => setBookOpen(false) }
@@ -284,8 +288,10 @@ export function BlackjackGame() {
     } else if (state.phase === 'settlement') {
       map.enter = map.space = () => dispatch({ type: 'nextRound' })
     } else if (decisionPending) {
+      // Explicit per-action keys — deriving them (first letter) once made
+      // surrender steal Stand's S while R sat dead.
       const act = (a: Action, allowed: boolean) => {
-        if (allowed) map[a === 'split' ? 'p' : a[0]] = () => handleAction(a)
+        if (allowed) map[keys[a].code] = () => handleAction(a)
       }
       act('hit', actions.canHit)
       act('stand', actions.canStand)
@@ -298,7 +304,7 @@ export function BlackjackGame() {
     // handleAction/hand/actions all derive from state; the ref pattern makes
     // stale closures impossible anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsOpen, bookOpen, state, decisionPending, actions, hand])
+  }, [settingsOpen, bookOpen, state, decisionPending, actions, hand, keys])
   useHotkeys(hotkeys)
 
   // --- copy ---------------------------------------------------------------
@@ -406,6 +412,7 @@ export function BlackjackGame() {
         {decisionPending && (
           <ActionBar
             ctx={actions}
+            keys={keys}
             caption={caption}
             hintShown={hintShown}
             onHint={() => setHintFor((current) => (current === hand ? null : hand))}

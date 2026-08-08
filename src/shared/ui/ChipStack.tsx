@@ -158,7 +158,11 @@ export function ChipStack({
           {hidden > 0 && <span className="chipstack__more">+{hidden}</span>}
         </span>
       )}
-      {showTotal && <span className="chipstack__total num">${amount.toLocaleString('en-US')}</span>}
+      {showTotal && (
+        <span key={amount} className="chipstack__total num">
+          ${amount.toLocaleString('en-US')}
+        </span>
+      )}
     </div>
   )
 }

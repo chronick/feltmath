@@ -1,5 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
+import {
+  setHotkeyLayout,
+  useHotkeyLayout,
+  type HotkeyLayout,
+} from '../../../shared/ui/hotkeyLayout'
 import { monteCarloMargin95 } from '../odds/equity'
 import type { HoldemConfig } from '../types'
 import { blindsLabel, configSummary, formatCount, formatMoney } from './format'
@@ -139,6 +144,11 @@ const SAMPLE_OPTIONS: Option<number>[] = [
   { value: 10000, label: '10k' },
 ]
 
+const LAYOUT_OPTIONS: Option<HotkeyLayout>[] = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'ergonomic', label: 'Ergo' },
+]
+
 function blindKey(config: HoldemConfig): string {
   return `${config.smallBlind}/${config.bigBlind}`
 }
@@ -155,6 +165,7 @@ function buyInBB(config: HoldemConfig): number {
 export function HoldemSettings({ config, canApplyNow, onApply, onClose }: HoldemSettingsProps) {
   const [draft, setDraft] = useState<HoldemConfig>(config)
   const patch = (next: Partial<HoldemConfig>) => setDraft((current) => ({ ...current, ...next }))
+  const layout = useHotkeyLayout()
   const depthBB = buyInBB(draft)
   const sampleMargin = monteCarloMargin95(draft.equitySamples) * 100
 
@@ -242,6 +253,22 @@ export function HoldemSettings({ config, canApplyNow, onApply, onClose }: Holdem
             value={draft.equitySamples}
             options={SAMPLE_OPTIONS}
             onChange={(equitySamples) => patch({ equitySamples })}
+          />
+        </Row>
+
+        <Row
+          label="Hotkey layout"
+          hint={
+            layout === 'ergonomic'
+              ? 'Space check/call · F fold · D bet/raise · A all-in — applies now, both games'
+              : 'Letters match the actions (F, C, R, A) — applies now, both games'
+          }
+        >
+          <Segmented
+            label="Hotkey layout"
+            value={layout}
+            options={LAYOUT_OPTIONS}
+            onChange={setHotkeyLayout}
           />
         </Row>
       </div>

@@ -80,7 +80,13 @@ export function BettingControls({
             <Kbd>C</Kbd>
           </button>
         )}
-        <button type="button" className="btn btn--gold betting__deal" onClick={onDeal} disabled={!canDeal}>
+        <button
+          type="button"
+          className="btn btn--gold betting__deal"
+          data-ready={canDeal ? 'true' : 'false'}
+          onClick={onDeal}
+          disabled={!canDeal}
+        >
           Deal
           <Kbd>⏎</Kbd>
         </button>

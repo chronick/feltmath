@@ -1,3 +1,4 @@
+import { ChipStack } from '../../../shared/ui/ChipStack'
 import { cssVars } from '../../../shared/ui/cssVars'
 import type { CardSize } from '../../../shared/ui/CardView'
 import type { Phase, SeatState } from '../types'
@@ -57,6 +58,16 @@ export function SeatView({
               settled={settled}
             />
           ))
+        ) : variant === 'human' && phase === 'betting' ? (
+          // The betting spot: wagered chips land here on the felt, with the
+          // same toss-in motion the cards use; empty, it calls for a bet.
+          <div className="betspot" data-live={seat.pendingBet > 0 ? 'true' : 'false'}>
+            {seat.pendingBet > 0 ? (
+              <ChipStack amount={seat.pendingBet} maxChips={7} showTotal />
+            ) : (
+              <span className="betspot__cta">Bet now</span>
+            )}
+          </div>
         ) : (
           <div className="seat__empty">
             {seat.pendingBet > 0 ? 'Bet posted' : variant === 'human' ? 'Place your bet' : 'Waiting'}
