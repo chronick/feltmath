@@ -1,4 +1,5 @@
 import { CHIP_DENOMS, Chip, ChipStack } from '../../../shared/ui/ChipStack'
+import { Kbd } from '../../../shared/ui/Kbd'
 import { MIN_BET } from '../types'
 import { formatMoney } from './format'
 
@@ -52,6 +53,7 @@ export function BettingControls({
           {pendingBet > 0 && (
             <button type="button" className="btn btn--quiet" onClick={onClear}>
               Clear
+              <Kbd>C</Kbd>
             </button>
           )}
         </div>
@@ -77,6 +79,7 @@ export function BettingControls({
         )}
         <button type="button" className="btn btn--gold betting__deal" onClick={onDeal} disabled={!canDeal}>
           Deal
+          <Kbd>⏎</Kbd>
         </button>
       </div>
 

@@ -1,3 +1,4 @@
+import { Kbd } from '../../../shared/ui/Kbd'
 import type { SeatState } from '../types'
 import { formatSignedMoney, outcomeLabel, outcomeTone } from './format'
 import { seatRoundNet } from './SeatView'
@@ -47,6 +48,7 @@ export function SettlementBar({ seat, onNext }: SettlementBarProps) {
         </span>
         <button type="button" className="btn btn--gold settle__next" onClick={onNext} autoFocus>
           Next hand
+          <Kbd>⏎</Kbd>
         </button>
       </div>
     </div>

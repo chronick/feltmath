@@ -1,3 +1,4 @@
+import { Kbd } from '../../../shared/ui/Kbd'
 import { formatMoney } from './format'
 
 export interface InsurancePromptProps {
@@ -24,9 +25,11 @@ export function InsurancePrompt({ mainBet, bankroll, onTake, onDecline }: Insura
         <div className="insurance__actions">
           <button type="button" className="btn btn--ghost" onClick={onTake} disabled={!affordable}>
             Yes, insure
+            <Kbd>Y</Kbd>
           </button>
           <button type="button" className="btn btn--gold" onClick={onDecline}>
             No thanks
+            <Kbd>N</Kbd>
           </button>
         </div>
       </div>

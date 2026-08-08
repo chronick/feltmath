@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { BookIcon, GearIcon } from '../../../shared/ui/Icons'
+import { useHotkeys } from '../../../shared/ui/useHotkeys'
+import type { HotkeyMap } from '../../../shared/ui/useHotkeys'
+import { CHIP_DENOMS } from '../../../shared/ui/ChipStack'
 import {
   addChips,
   applyRules,
@@ -53,6 +56,7 @@ import './blackjack.css'
 type GameAction =
   | { type: 'step' }
   | { type: 'setBet'; amount: number }
+  | { type: 'addToBet'; amount: number }
   | { type: 'addChips'; amount: number }
   | { type: 'startRound' }
   | { type: 'act'; action: Action }
@@ -71,6 +75,12 @@ function reducer(state: GameState, action: GameAction): GameState {
       return needsStep(state) ? step(state) : state
     case 'setBet':
       return state.phase === 'betting' ? setBet(state, Math.max(0, action.amount)) : state
+    case 'addToBet':
+      // Additive form reads the LIVE bet inside the reducer, so back-to-back
+      // dispatches (key repeat, double taps) can never work from a stale bet.
+      return state.phase === 'betting'
+        ? setBet(state, Math.max(0, humanSeat(state).pendingBet + action.amount))
+        : state
     case 'addChips':
       return addChips(state, action.amount)
     case 'startRound':
@@ -227,6 +237,53 @@ export function BlackjackGame() {
     setSettingsOpen(false)
   }
 
+  // --- hotkeys --------------------------------------------------------------
+  // Rebuilt every render (cheap); useHotkeys reads it through a ref. Modals
+  // own the keyboard while open: settings gets nothing (form fields + Esc),
+  // the book keeps only its own toggle.
+  const hotkeys = useMemo<HotkeyMap>(() => {
+    if (settingsOpen) return {}
+    if (bookOpen) return { b: () => setBookOpen(false) }
+
+    const map: HotkeyMap = {
+      b: () => {
+        setBookHighlight(null)
+        setBookOpen(true)
+      },
+    }
+
+    if (state.phase === 'betting') {
+      map.enter = map.space = () => dispatch({ type: 'startRound' })
+      map.c = () => dispatch({ type: 'setBet', amount: 0 })
+      // 1..4 = chip denominations in on-screen order (small → large);
+      // CHIP_DENOMS itself is declared large → small.
+      const denomsAscending = [...CHIP_DENOMS].reverse()
+      denomsAscending.forEach((denom, i) => {
+        map[String(i + 1)] = () => dispatch({ type: 'addToBet', amount: denom })
+      })
+    } else if (state.phase === 'insurance') {
+      map.y = () => dispatch({ type: 'insurance', take: true })
+      map.n = () => dispatch({ type: 'insurance', take: false })
+    } else if (state.phase === 'settlement') {
+      map.enter = map.space = () => dispatch({ type: 'nextRound' })
+    } else if (decisionPending) {
+      const act = (a: Action, allowed: boolean) => {
+        if (allowed) map[a === 'split' ? 'p' : a[0]] = () => handleAction(a)
+      }
+      act('hit', actions.canHit)
+      act('stand', actions.canStand)
+      act('double', actions.canDouble)
+      act('split', actions.canSplit)
+      act('surrender', actions.canSurrender)
+      map['?'] = map['/'] = () => setHintFor((current) => (current === hand ? null : hand))
+    }
+    return map
+    // handleAction/hand/actions all derive from state; the ref pattern makes
+    // stale closures impossible anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsOpen, bookOpen, state, decisionPending, actions, hand])
+  useHotkeys(hotkeys)
+
   // --- copy ---------------------------------------------------------------
   const acting = currentSeat(state)
   let status = ''
@@ -321,10 +378,8 @@ export function BlackjackGame() {
           <BettingControls
             bankroll={human.bankroll}
             pendingBet={human.pendingBet}
-            onAddChip={(denom) => dispatch({ type: 'setBet', amount: human.pendingBet + denom })}
-            onRemoveChip={(denom) =>
-              dispatch({ type: 'setBet', amount: Math.max(0, human.pendingBet - denom) })
-            }
+            onAddChip={(denom) => dispatch({ type: 'addToBet', amount: denom })}
+            onRemoveChip={(denom) => dispatch({ type: 'addToBet', amount: -denom })}
             onClear={() => dispatch({ type: 'setBet', amount: 0 })}
             onDeal={() => dispatch({ type: 'startRound' })}
             onRebuy={() => dispatch({ type: 'addChips', amount: REBUY_AMOUNT })}

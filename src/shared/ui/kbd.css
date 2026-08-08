@@ -1,0 +1,27 @@
+.kbd {
+  display: inline-block;
+  min-width: 1.15em;
+  padding: 0.05em 0.32em;
+  margin-left: 0.5em;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-bottom-width: 2px;
+  background: rgba(0, 0, 0, 0.28);
+  font: 600 0.68em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  opacity: 0.75;
+  vertical-align: 0.08em;
+}
+
+button:disabled .kbd {
+  opacity: 0.35;
+}
+
+/* Touch-only devices have no keyboard — hide the chips entirely. */
+@media (hover: none) and (pointer: coarse) {
+  .kbd {
+    display: none;
+  }
+}
