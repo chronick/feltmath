@@ -732,6 +732,16 @@
   gap: 9px;
 }
 
+.betting__denoms {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.betting__denomslabel {
+  display: none;
+}
+
 .betting__chips {
   display: flex;
   justify-content: center;
@@ -782,6 +792,7 @@
 
 .betting__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1864,6 +1875,100 @@
   }
 }
 
+@media (min-width: 1100px) {
+  /* Match the left stage column in the centered 1460px body grid:
+     16px outer padding + flexible stage + 14px gap + 340px dock. */
+  .bj__controls {
+    width: calc(100% - 386px);
+    max-width: 1074px;
+    margin-right: 0;
+    margin-left: max(16px, calc((100% - 1460px) / 2 + 16px));
+    padding: 8px 0 calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .betting {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) auto minmax(220px, 1fr);
+    align-items: center;
+    gap: 8px 12px;
+    padding: 9px 12px;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, rgba(19, 42, 32, 0.94), rgba(7, 22, 16, 0.96));
+    box-shadow:
+      0 12px 28px rgba(0, 0, 0, 0.26),
+      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  }
+
+  .betting__denoms {
+    grid-column: 2;
+    grid-row: 1;
+    align-items: center;
+    gap: 1px;
+  }
+
+  .betting__denomslabel {
+    display: block;
+    font-size: 9px;
+    color: var(--text-3);
+  }
+
+  .betting__chips {
+    gap: 7px;
+  }
+
+  .betting__wager {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .betting__wagerhead {
+    justify-content: flex-start;
+  }
+
+  .betting__hint {
+    max-width: 220px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .betting__actions {
+    grid-column: 3;
+    grid-row: 1;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .betting__actions .btn {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+
+  .betting__actions > .btn:not(.betting__clear):not(.betting__deal) {
+    flex-basis: 100%;
+  }
+
+  .betting__clear {
+    min-width: 82px;
+  }
+
+  .betting__deal {
+    flex: 0 0 auto;
+    min-width: 108px;
+    font-size: 14px;
+  }
+
+  .betting__warn {
+    grid-column: 1 / -1;
+  }
+}
+
 /* landscape phones: flatten the arc, compress everything vertically */
 @media (orientation: landscape) and (max-height: 560px) {
   .bj__bar {
@@ -1925,5 +2030,16 @@
 
   .panel--odds .panel__body {
     max-height: 30dvh;
+  }
+}
+
+@media (min-width: 1100px) and (orientation: landscape) and (max-height: 560px) {
+  /* The short-landscape body uses an 8px inset, 8px gap, and 280px dock. */
+  .bj__controls {
+    width: calc(100% - 304px);
+    max-width: 1156px;
+    margin-right: 0;
+    margin-left: max(8px, calc((100% - 1460px) / 2 + 8px));
+    padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
   }
 }
