@@ -32,30 +32,9 @@ export function BettingControls({
 
   return (
     <div className="betting">
-      <div className="betting__chips" role="group" aria-label="Add chips to your bet">
-        {[...CHIP_DENOMS].reverse().map((denom) => (
-          <button
-            key={denom}
-            type="button"
-            className="betting__chip"
-            onClick={() => onAddChip(denom)}
-            disabled={denom > available}
-            aria-label={`Bet $${denom} more`}
-          >
-            <Chip denom={denom} size={46} />
-          </button>
-        ))}
-      </div>
-
       <div className="betting__wager">
         <div className="betting__wagerhead">
           <span className="smallcaps">Your bet</span>
-          {pendingBet > 0 && (
-            <button type="button" className="btn btn--quiet" onClick={onClear}>
-              Clear
-              <Kbd>C</Kbd>
-            </button>
-          )}
         </div>
 
         {pendingBet > 0 ? (
@@ -67,6 +46,24 @@ export function BettingControls({
         )}
       </div>
 
+      <div className="betting__denoms">
+        <span className="smallcaps betting__denomslabel">Add chips</span>
+        <div className="betting__chips" role="group" aria-label="Add chips to your bet">
+          {[...CHIP_DENOMS].reverse().map((denom) => (
+            <button
+              key={denom}
+              type="button"
+              className="betting__chip"
+              onClick={() => onAddChip(denom)}
+              disabled={denom > available}
+              aria-label={`Bet $${denom} more`}
+            >
+              <Chip denom={denom} size={46} />
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="betting__actions">
         {showRebuy && (
           <button
@@ -75,6 +72,12 @@ export function BettingControls({
             onClick={onRebuy}
           >
             Rebuy +{formatMoney(1000)}
+          </button>
+        )}
+        {pendingBet > 0 && (
+          <button type="button" className="btn btn--quiet betting__clear" onClick={onClear}>
+            Clear
+            <Kbd>C</Kbd>
           </button>
         )}
         <button type="button" className="btn btn--gold betting__deal" onClick={onDeal} disabled={!canDeal}>
