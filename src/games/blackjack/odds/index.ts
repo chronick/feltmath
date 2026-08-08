@@ -1,8 +1,8 @@
 // Odds entry point: one call in, a full OddsReport out.
 //
-// The draw model and its approximation are documented at the top of
-// dealerOdds.ts (with replacement from the current unseen composition).
-// Split/resplit caveats are documented on `splitEV` in playerEV.ts.
+// Dealer draws are exact without-replacement draws from the unseen shoe.
+// Player hit/split approximations and resplit caveats are documented in
+// playerEV.ts.
 
 import type {
   ActionContext,
@@ -25,6 +25,7 @@ import {
 } from './playerEV'
 
 export { dealerDistribution } from './dealerOdds'
+export { canFullyFundDoubleAfterSplit } from './playerEV'
 
 /**
  * Full odds report for the hand that is currently deciding.
@@ -43,6 +44,8 @@ export function computeOdds(
   comp: Composition,
   rules: RulesConfig,
   ctx: ActionContext,
+  /** Can this bankroll fund the split plus both possible post-split doubles? */
+  canFundDoubleAfterSplit: boolean = rules.doubleAfterSplit,
 ): OddsReport {
   const upValue = rankValue(dealerUp)
   const conditionNoBlackjack = upValue === 1 || upValue === 10
@@ -61,7 +64,10 @@ export function computeOdds(
     // Bust (EV −1), a made 21, or nothing legal to do: only standing is real.
     evs.push({ action: 'stand', ev: standValue, available: true })
   } else {
-    const evCtx = createEVContext(comp, dealer, rules)
+    const effectiveRules = rules.doubleAfterSplit && !canFundDoubleAfterSplit
+      ? { ...rules, doubleAfterSplit: false }
+      : rules
+    const evCtx = createEVContext(comp, dealer, effectiveRules)
     if (ctx.canStand) {
       evs.push({ action: 'stand', ev: standValue, available: true })
     }

@@ -23,11 +23,11 @@ export function HoldemStats({ stats, open, onToggle }: HoldemStatsProps) {
 
   const items: Cell[] = [
     { label: 'Hands', value: String(stats.hands) },
-    { label: 'Won', value: `${stats.handsWon} · ${rate(stats.handsWon, stats.hands)}` },
+    { label: 'Pot share', value: `${stats.handsWon} · ${rate(stats.handsWon, stats.hands)}` },
     { label: 'Net', value: formatSignedMoney(stats.net), tone: netTone },
     { label: 'VPIP', value: rate(stats.vpipHands, stats.hands) },
     { label: 'Showdowns', value: String(stats.showdowns) },
-    { label: 'SD won', value: rate(stats.showdownsWon, stats.showdowns) },
+    { label: 'SD share', value: rate(stats.showdownsWon, stats.showdowns) },
   ]
 
   return (

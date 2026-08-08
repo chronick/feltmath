@@ -7,7 +7,10 @@
     "dev": "vite --port 5199 --strictPort",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "verify:blackjack": "esbuild scripts/verify.ts --bundle --platform=node --format=esm --outfile=/tmp/feltmath-verify-blackjack.mjs && node /tmp/feltmath-verify-blackjack.mjs",
+    "verify:holdem": "esbuild scripts/verify-holdem.ts --bundle --platform=node --format=esm --outfile=/tmp/feltmath-verify-holdem.mjs && node /tmp/feltmath-verify-holdem.mjs",
+    "test": "npm run verify:blackjack && npm run verify:holdem"
   },
   "dependencies": {
     "react": "^19.1.0",

@@ -4,15 +4,23 @@ const MINUS = '−' // true minus sign — lines up with tabular numerals
 
 /** Money, never rendered negative for bankrolls (free-play can't go below 0). */
 export function formatMoney(amount: number): string {
-  return `$${Math.max(0, Math.round(amount)).toLocaleString('en-US')}`
+  const safe = Number.isFinite(amount) ? Math.max(0, amount) : 0
+  return `$${safe.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(safe) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 /** Signed money for deltas: "+$120" / "−$45" / "$0". */
 export function formatSignedMoney(amount: number): string {
-  const rounded = Math.round(amount)
-  if (rounded === 0) return '$0'
-  const sign = rounded > 0 ? '+' : MINUS
-  return `${sign}$${Math.abs(rounded).toLocaleString('en-US')}`
+  const safe = Number.isFinite(amount) ? amount : 0
+  if (safe === 0) return '$0'
+  const abs = Math.abs(safe)
+  const sign = safe > 0 ? '+' : MINUS
+  return `${sign}$${abs.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(abs) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 // NOTE: percentage and EV formatting live in `../odds` (formatPct / formatEV)

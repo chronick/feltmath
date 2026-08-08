@@ -1,7 +1,8 @@
 // Player expected values, in units of the INITIAL bet.
 //
-// Draw model and its approximation are documented at the top of dealerOdds.ts:
-// every draw here is with replacement from the current unseen composition.
+// The dealer distribution is removal-aware. Prospective PLAYER draws in this
+// file remain the infinite-deck approximation: each draw uses the current
+// unseen composition's fixed per-value frequencies.
 //
 // Post-peek assumption: `computeOdds` builds the dealer distribution with the
 // natural already ruled out for ace/ten upcards, so these EVs are conditional
@@ -57,6 +58,15 @@ export function canDoubleTotal(total: number, soft: boolean, rules: RulesConfig)
   if (soft) return false
   if (rules.doubleOn === '9to11') return total >= 9 && total <= 11
   return total >= 10 && total <= 11
+}
+
+/**
+ * The split approximation models two hands and may double both. Before the
+ * split, that worst case needs three still-unposted bets: one for the split
+ * and one double stake for each resulting hand.
+ */
+export function canFullyFundDoubleAfterSplit(bankroll: number, bet: number): boolean {
+  return Number.isFinite(bankroll) && Number.isFinite(bet) && bet > 0 && bankroll >= bet * 3
 }
 
 export interface StandOutcomes {
@@ -149,8 +159,8 @@ export function doubleEV(total: number, soft: boolean, ctx: EVContext): number {
  * Deliberately NOT modelled:
  *   - resplits (`maxSplitHands`, `resplitAces`) — the true value of a pair of
  *     8s is slightly higher than this because you may split again;
- *   - removal of the two pair cards from the draw distribution (see the
- *     with-replacement note in dealerOdds.ts);
+ *   - removal during the player's prospective draws (see the approximation
+ *     note at the top of this file);
  *   - the 1:1 payout on a post-split 21 is handled correctly (it is scored as
  *     a plain 21, never as a natural).
  *

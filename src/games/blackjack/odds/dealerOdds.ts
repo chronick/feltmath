@@ -6,17 +6,10 @@
 // playerEV.ts, index.ts)
 // ---------------------------------------------------------------------------
 // `comp` is the CURRENT unseen composition (shoe + the still-hidden hole card).
-// It is collapsed into a probability per blackjack VALUE — ace = 1, and each of
-// 10/J/Q/K = 10 — and every draw in every recursion below is modelled WITH
-// REPLACEMENT from those fixed frequencies.
-//
-// The model is therefore composition-AWARE (a ten-rich or ace-poor shoe really
-// does move the numbers) but ignores removal effects DURING a recursion:
-// drawing a ten does not make the next ten any less likely. This is the
-// standard "infinite deck carrying the current frequencies" approximation.
-// Against an exact removal-aware computation the error is a few thousandths of
-// a bet for 6–8 deck shoes — below the two decimals the UI shows — and it keeps
-// every call to `computeOdds` far under the 50ms budget.
+// Dealer draws are exact draws WITHOUT replacement from that composition. The
+// player's prospective hit/double/split trees still use the per-value
+// probabilities exported below as a documented infinite-deck approximation;
+// the dealer panel itself always reflects the actual remaining shoe.
 //
 // Aces need no special draw handling: a hand is carried as (total, soft) where
 // `total` already counts one ace as 11 whenever that fits and `soft` means that
@@ -104,6 +97,13 @@ const FULL_DECK_PROBS: ValueProbs = [
   4 * ONE_RANK,
 ]
 
+const FULL_DECK_COUNTS: readonly number[] = [
+  0,
+  4, 4, 4, 4, 4,
+  4, 4, 4, 4,
+  16,
+]
+
 /**
  * Collapse an unseen composition into per-value draw probabilities.
  * A zero-card (or garbage) composition falls back to full-deck frequencies so
@@ -124,20 +124,18 @@ export function valueProbabilities(comp: Composition): ValueProbs {
   return probs
 }
 
-/**
- * Renormalised draw distribution with `value` removed — used for the dealer's
- * hole card once the peek has ruled out a natural.
- */
-function conditionAway(probs: ValueProbs, value: number): ValueProbs {
-  // Degenerate shoe (every unseen card would complete the natural): fall back
-  // to full-deck shape rather than divide by ~0.
-  const base = 1 - probs[value] > 1e-12 ? probs : FULL_DECK_PROBS
-  const remaining = 1 - base[value]
-  const out = new Array<number>(11).fill(0)
-  for (let v = 1; v <= 10; v++) {
-    out[v] = v === value ? 0 : clamp01(base[v] / remaining)
+/** Current counts collapsed by blackjack value; ten/J/Q/K share one bucket. */
+function valueCounts(comp: Composition): number[] {
+  const counts = new Array<number>(11).fill(0)
+  let total = 0
+  for (const rank of RANKS) {
+    const raw = comp[rank]
+    if (!Number.isFinite(raw) || raw <= 0) continue
+    const n = Math.floor(raw)
+    counts[rankValue(rank)] += n
+    total += n
   }
-  return out
+  return total > 0 ? counts : [...FULL_DECK_COUNTS]
 }
 
 // ---------------------------------------------------------------------------
@@ -160,9 +158,10 @@ function zeroBuckets(): number[] {
 function playDealer(
   total: number,
   soft: boolean,
-  probs: ValueProbs,
+  counts: number[],
+  remaining: number,
   hitsSoft17: boolean,
-  memo: Map<number, number[]>,
+  memo: Map<string, number[]>,
 ): number[] {
   if (total > 21) {
     const busted = zeroBuckets()
@@ -177,16 +176,34 @@ function playDealer(
     return stood
   }
 
-  const key = total * 2 + (soft ? 1 : 0)
+  // The same total with a different remaining shoe is a different state.
+  const key = `${total}|${soft ? 1 : 0}|${counts.slice(1).join(',')}`
   const cached = memo.get(key)
   if (cached) return cached
 
   const out = zeroBuckets()
+  if (remaining <= 0) {
+    // Impossible in a valid live round, but callers can supply a synthetic or
+    // exhausted composition. Fall back to a fresh one-deck shape so the public
+    // distribution remains finite and normalized instead of returning zeros.
+    const fallback = [...FULL_DECK_COUNTS]
+    return playDealer(
+      total,
+      soft,
+      fallback,
+      fallback.reduce((sum, n) => sum + n, 0),
+      hitsSoft17,
+      new Map<string, number[]>(),
+    )
+  }
   for (let v = 1; v <= 10; v++) {
-    const p = probs[v]
-    if (p <= 0) continue
+    const n = counts[v]
+    if (n <= 0) continue
+    const p = n / remaining
+    counts[v]--
     const next = addValue(total, soft, v)
-    const sub = playDealer(next.total, next.soft, probs, hitsSoft17, memo)
+    const sub = playDealer(next.total, next.soft, counts, remaining - 1, hitsSoft17, memo)
+    counts[v]++
     for (let i = 0; i < BUCKETS; i++) out[i] += p * sub[i]
   }
   memo.set(key, out)
@@ -212,30 +229,51 @@ export function dealerDistribution(
   rules: RulesConfig,
   conditionNoBlackjack: boolean,
 ): DealerDistribution {
-  const probs = valueProbabilities(comp)
   const upValue = rankValue(dealerUp)
 
   // Hole-card value that would complete a natural (0 = impossible upcard).
   const naturalValue = upValue === 1 ? 10 : upValue === 10 ? 1 : 0
   const conditioned = conditionNoBlackjack && naturalValue !== 0
-  const holeProbs = conditioned ? conditionAway(probs, naturalValue) : probs
+  let counts = valueCounts(comp)
+  let unseen = counts.reduce((sum, n) => sum + n, 0)
+  let holeChoices = conditioned ? unseen - counts[naturalValue] : unseen
+
+  // A degenerate supplied composition (all unseen cards would make the ruled-
+  // out natural) cannot describe a live post-peek shoe. Preserve a finite,
+  // normalized answer by falling back to one deck's shape.
+  if (holeChoices <= 0) {
+    counts = [...FULL_DECK_COUNTS]
+    unseen = 13
+    holeChoices = conditioned ? unseen - counts[naturalValue] : unseen
+  }
 
   const start = startingHand(dealerUp)
-  const memo = new Map<number, number[]>()
+  const memo = new Map<string, number[]>()
   const acc = zeroBuckets()
   let pBlackjack = 0
 
   for (let v = 1; v <= 10; v++) {
-    const p = holeProbs[v]
-    if (p <= 0) continue
+    if (conditioned && v === naturalValue) continue
+    const n = counts[v]
+    if (n <= 0) continue
+    const p = n / holeChoices
     if (v === naturalValue) {
       // Two-card 21 with an ace/ten upcard is by definition a natural.
       // (Unreachable when conditioned: that weight is already 0.)
       pBlackjack += p
       continue
     }
+    counts[v]--
     const next = addValue(start.total, start.soft, v)
-    const sub = playDealer(next.total, next.soft, probs, rules.dealerHitsSoft17, memo)
+    const sub = playDealer(
+      next.total,
+      next.soft,
+      counts,
+      unseen - 1,
+      rules.dealerHitsSoft17,
+      memo,
+    )
+    counts[v]++
     for (let i = 0; i < BUCKETS; i++) acc[i] += p * sub[i]
   }
 

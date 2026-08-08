@@ -22,7 +22,7 @@ import {
   unseenComposition,
 } from '../engine/game'
 import { handLabel } from '../engine/hand'
-import { computeOdds } from '../odds'
+import { canFullyFundDoubleAfterSplit, computeOdds } from '../odds'
 import { basicStrategy } from '../strategy/basicStrategy'
 import type {
   Action,
@@ -155,17 +155,34 @@ export function BlackjackGame() {
   const anyAction =
     actions.canHit || actions.canStand || actions.canDouble || actions.canSplit || actions.canSurrender
   const decisionPending = state.phase === 'playerTurns' && anyAction && !!hand && !!upcard
+  // Split EV models both resulting hands doubling. That requires three
+  // still-unposted bets: one to split and one double stake for each hand.
+  const canFundDoubleAfterSplit = !actions.canSplit || !hand ||
+    canFullyFundDoubleAfterSplit(human.bankroll, hand.bet)
+  const decisionRules = useMemo<RulesConfig>(
+    () => state.rules.doubleAfterSplit && !canFundDoubleAfterSplit
+      ? { ...state.rules, doubleAfterSplit: false }
+      : state.rules,
+    [state.rules, canFundDoubleAfterSplit],
+  )
 
   const advice = useMemo<StrategyAdvice | null>(() => {
     if (!decisionPending || !hand || !upcard) return null
-    return basicStrategy(hand.cards, upcard.rank, state.rules, actions)
-  }, [decisionPending, hand, upcard, state.rules, actions])
+    return basicStrategy(hand.cards, upcard.rank, state.rules, actions, canFundDoubleAfterSplit)
+  }, [decisionPending, hand, upcard, state.rules, actions, canFundDoubleAfterSplit])
 
   const odds = useMemo<OddsReport | null>(() => {
     if (!decisionPending || !hand || !upcard) return null
-    return computeOdds(hand.cards, upcard.rank, unseenComposition(state), state.rules, actions)
+    return computeOdds(
+      hand.cards,
+      upcard.rank,
+      unseenComposition(state),
+      state.rules,
+      actions,
+      canFundDoubleAfterSplit,
+    )
     // `state` drives unseenComposition; the rest are its own inputs.
-  }, [decisionPending, hand, upcard, state, actions])
+  }, [decisionPending, hand, upcard, state, actions, canFundDoubleAfterSplit])
 
   // --- UI state -----------------------------------------------------------
   const [hintFor, setHintFor] = useState<HandState | null>(null)
@@ -408,11 +425,12 @@ export function BlackjackGame() {
         )}
       </div>
 
-      {/* The book always reflects the rules actually in play — staged changes
-          aren't governing this hand, and the advice was derived from these. */}
+      {/* Staged settings never govern the current hand. When the active
+          bankroll cannot fund a post-split double, the book shows the
+          effective no-DAS chart used by both the hint and the odds panel. */}
       {bookOpen && (
         <BookModal
-          rules={state.rules}
+          rules={decisionRules}
           highlight={bookHighlight}
           onClose={() => setBookOpen(false)}
         />

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
+import { monteCarloMargin95 } from '../odds/equity'
 import type { HoldemConfig } from '../types'
 import { blindsLabel, configSummary, formatCount, formatMoney } from './format'
 
@@ -154,6 +155,8 @@ function buyInBB(config: HoldemConfig): number {
 export function HoldemSettings({ config, canApplyNow, onApply, onClose }: HoldemSettingsProps) {
   const [draft, setDraft] = useState<HoldemConfig>(config)
   const patch = (next: Partial<HoldemConfig>) => setDraft((current) => ({ ...current, ...next }))
+  const depthBB = buyInBB(draft)
+  const sampleMargin = monteCarloMargin95(draft.equitySamples) * 100
 
   const setBlinds = (key: string) => {
     const [sb, bb] = key.split('/').map(Number)
@@ -205,14 +208,22 @@ export function HoldemSettings({ config, canApplyNow, onApply, onClose }: Holdem
           />
         </Row>
 
-        <Row label="Buy-in" hint={`${formatMoney(draft.buyIn)} at these blinds`}>
+        <Row label="Buy-in" hint={`${formatMoney(draft.buyIn)} at these blinds · charts use a 100 bb baseline`}>
           <Segmented
             label="Buy-in depth"
-            value={buyInBB(draft)}
+            value={depthBB}
             options={BUYIN_OPTIONS}
             onChange={(bb) => patch({ buyIn: bb * draft.bigBlind })}
           />
         </Row>
+
+        {depthBB !== 100 && (
+          <p className="hset__notice">
+            Preflop charts and sizing are calibrated for 100 bb. At {depthBB} bb, treat them as a
+            baseline: shorter stacks reduce implied odds; deeper stacks increase positional and
+            reverse-implied-odds effects.
+          </p>
+        )}
 
         <Row label="Auto top-up" hint="Rebuy short stacks back to the buy-in between hands">
           <Toggle
@@ -224,7 +235,7 @@ export function HoldemSettings({ config, canApplyNow, onApply, onClose }: Holdem
 
         <Row
           label="Equity samples"
-          hint={`${formatCount(draft.equitySamples)} Monte Carlo runs — more is smoother, slower`}
+          hint={`${formatCount(draft.equitySamples)} random-hand runs · approx. 95% margin ±${sampleMargin.toFixed(1)} points`}
         >
           <Segmented
             label="Equity samples"

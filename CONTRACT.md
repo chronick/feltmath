@@ -1,9 +1,10 @@
 # Module contracts
 
 Multi-game trainer. `src/shared/` is game-agnostic (cards, rng, reusable UI);
-each game lives under `src/games/<game>/`. Blackjack is the first module;
-Texas hold'em will follow — keep shared primitives generic, keep everything
-blackjack-specific inside `src/games/blackjack/`.
+each game lives under `src/games/<game>/`. Blackjack and Texas Hold'em are
+implemented. Keep shared primitives generic and game-specific behavior inside
+the corresponding module directory. Hold'em's contract is in
+`CONTRACT-HOLDEM.md`.
 
 All types referenced below are defined in `src/games/blackjack/types.ts` and
 `src/shared/cards.ts`. Do not redefine them.
@@ -97,8 +98,8 @@ surrender → bet/2; insurance win → 3× insuranceBet returned (stake + 2:1).
 `availableActions` for a 2-card hand: double allowed per `rules.doubleOn`
 (hard totals; any2 = always) + bankroll ≥ extra bet + (if fromSplit, requires
 doubleAfterSplit) + not on split aces w/ one-card rule; split requires pair
-(equal RANK VALUE for tens? NO — equal rank only, e.g. K,K yes / K,10 no,
-keep it strict), seat hands < maxSplitHands, bankroll ≥ extra bet, aces
+(intentional house rule: equal rank only, e.g. K,K yes / K,10 no), seat hands
+< maxSplitHands, bankroll ≥ extra bet, aces
 resplit only if resplitAces; surrender only first decision of a non-split
 2-card hand when lateSurrender. Hit/stand always true for an unfinished hand
 (except split-aces one-card rule → only stand).
@@ -109,13 +110,13 @@ human action against `basicStrategy(...).action` before applying it.
 ## src/games/blackjack/strategy/basicStrategy.ts
 
 ```ts
-export function basicStrategy(cards: Card[], dealerUp: Rank, rules: RulesConfig, ctx: ActionContext): StrategyAdvice
+export function basicStrategy(cards: Card[], dealerUp: Rank, rules: RulesConfig, ctx: ActionContext, canFundDoubleAfterSplit?: boolean): StrategyAdvice
 ```
 
-Multi-deck basic strategy, correct for both H17 and S17 (the standard
-deviations: H17 → double 11 vs A, double soft 19 vs 6, double soft 18 vs 2,
-surrender 15 & 17 vs A, etc.), DAS-aware pair table, falls back sensibly when
-the book action is unavailable (double→hit unless Ds→stand; split
+Basic strategy selected for single-deck, double-deck, or 4–8 deck play and
+adjusted for H17/S17, surrender, DAS, double restrictions, and split-ace rules.
+It falls back sensibly when the book action is unavailable (double→hit unless
+Ds→stand; split
 unavailable → play as hard/soft total; surrender unavailable → Rh hit /
 Rs stand). Explanation strings: concise, concrete, teach the WHY
 ("Dealer's 6 busts 42% of the time — let them take the risk").
@@ -132,7 +133,7 @@ basicStrategy FROM these tables to guarantee consistency).
 ## src/games/blackjack/ai/aiPlayer.ts
 
 ```ts
-export function aiDecide(cards: Card[], dealerUp: Rank, rules: RulesConfig, ctx: ActionContext): Action
+export function aiDecide(cards: Card[], dealerUp: Rank, rules: RulesConfig, ctx: ActionContext, canFundDoubleAfterSplit?: boolean): Action
 export function aiBet(seatId: number, round: number, bankroll: number): number  // deterministic, chip-multiple spread
 export const AI_NAMES: readonly string[]  // >= 6 fun names
 ```
@@ -143,12 +144,12 @@ aiDecide = basicStrategy constrained to ctx (never insures).
 
 ```ts
 export function dealerDistribution(dealerUp: Rank, comp: Composition, rules: RulesConfig, conditionNoBlackjack: boolean): DealerDistribution
-export function computeOdds(playerCards: Card[], dealerUp: Rank, comp: Composition, rules: RulesConfig, ctx: ActionContext): OddsReport
+export function computeOdds(playerCards: Card[], dealerUp: Rank, comp: Composition, rules: RulesConfig, ctx: ActionContext, canFundDoubleAfterSplit?: boolean): OddsReport
 ```
 
-- `comp` is the CURRENT unseen composition (shoe + hole card). Model draws
-  with replacement from `comp` frequencies (composition-aware but ignoring
-  removal during recursion — document this approximation in a comment).
+- `comp` is the CURRENT unseen composition (shoe + hole card). Dealer recursion
+  removes each drawn card from the composition and memoizes the resulting
+  states.
 - Dealer recursion: start from upcard, draw until stand/bust per H17/S17.
   `conditionNoBlackjack=true` (post-peek, upcard A or 10): renormalize the
   FIRST hole-card draw to exclude the rank completing a natural.
@@ -156,10 +157,13 @@ export function computeOdds(playerCards: Card[], dealerUp: Rank, comp: Compositi
   (player bust → standWin=0, standLose=1).
 - EVs in units of initial bet: stand (win×1 − lose×1), hit (optimal
   play-after via memoized recursion over (total, soft)), double (one card
-  then stand, ×2 stakes), split (approximation: 2 × EV of a fresh one-card
+  then stand, ×2 stakes), split (2 × EV of a fresh one-card
   hand starting with the pair rank played optimally; split aces one-card
   rule respected), surrender (−0.5). Natural-blackjack payout does NOT
   appear here (odds are only shown mid-decision, never for a natural).
+- The dealer distribution is exact for the current shoe. Prospective player
+  draws use fixed live-shoe value frequencies; split EV additionally omits
+  resplits. The UI labels these action EVs as modeled approximations.
 - Must complete in < ~50ms for a 8-deck shoe. Memoize inside the call.
 - Best action = max EV among available.
 
@@ -172,5 +176,5 @@ panel, hint card, book modal, settings, betting controls, stats bar.
 
 ## App shell
 
-`src/App.tsx` — minimal game-switcher shell (blackjack only today) →
-renders `BlackjackGame`. `src/main.tsx` mounts App, registers `sw.js`.
+`src/App.tsx` — lazy-loaded Blackjack/Hold'em game switcher.
+`src/main.tsx` mounts App and registers `sw.js`.

@@ -53,9 +53,10 @@ export function potTotal(state: HoldemState): number  // all totalCommits
 
 ### Betting rules (NLHE)
 
-- `currentBet` = highest streetCommit this street. `lastRaiseSize` starts at
-  BB preflop / BB as the min opening bet postflop; a full raise sets it to
-  (newTotal − previousCurrentBet).
+- `currentBet` = highest amount players must match this street. Preflop it is
+  at least the configured big blind even when the BB is all-in short;
+  `lastRaiseSize` starts at BB. Postflop the minimum opening bet is BB. A full
+  raise sets `lastRaiseSize` to (newTotal − previousCurrentBet).
 - Min raise-to = currentBet + lastRaiseSize (capped by stack → all-in).
 - Call for less (all-in short call) allowed. **Incomplete all-in raise
   (increment < lastRaiseSize) does NOT re-open action** for seats that
@@ -65,6 +66,9 @@ export function potTotal(state: HoldemState): number  // all totalCommits
   non-all-in seats); acting seat pops itself; a FULL bet/raise refills it
   with every other live non-all-in seat (in order after the raiser).
   Betting closes when empty.
+- Multiple incomplete all-in raises are cumulative for reopening purposes: a
+  player who has already acted regains the right to raise once the total
+  increase faced since that action is at least one full `lastRaiseSize`.
 - Fold/check/call/bet/raise/allin all emit events ("Rocket Ron raises to
   $60"). `allin` action = raise/bet/call for the seat's whole stack.
 - When only one live (unfolded) seat remains → return any uncalled excess to
@@ -134,8 +138,8 @@ export function describeMade(hole: Card[], board: Card[]): string  // "Pair of k
   Fisher-Yates partial), evaluates all, scores win/tie (tie = split share:
   equity = (wins + ties/k)/samples where k = players tied).
 - Exact enumeration instead of MC when cheap: river vs 1 opponent
-  (C(45,2)=990) and turn vs 1 opponent (44 rivers × C(45,2)... compute as
-  enumerate opponent holes × remaining rivers ≈ 43k evals) → method 'exact'.
+  (C(45,2)=990) and turn vs 1 opponent
+  (C(46,2) opponent holes × 44 rivers = 45,540 assignments) → method 'exact'.
   Multiway or earlier streets → 'monte-carlo'.
 - Target <80ms at samples=5000 with 3 opponents (lean on the fast evaluator;
   reuse one scratch deck array, no per-sample allocation storms).
@@ -155,7 +159,7 @@ export function positionOf(state: HoldemState, seatId: number): Position
 export function holdemAdvice(state: HoldemState, ctx: PokerActionContext): HoldemAdvice
 ```
 
-- Charts: standard solid 6-max baseline (UTG ≈15% open, HJ ≈18%, CO ≈26%,
+- Charts: standard solid 100bb 6-max baseline (UTG ≈15% open, HJ ≈18%, CO ≈26%,
   BTN ≈44%, SB ≈35% first-in; BB defend vs open ≈ call wide / 3bet value+
   some suited broadway). 13×13 grid keys: pairs 'TT', suited 'AQs', offsuit
   'AQo' — every one of the 169 combos present in every chart.
@@ -163,9 +167,10 @@ export function holdemAdvice(state: HoldemState, ctx: PokerActionContext): Holde
   raise → vsOpenChart (BB uses defend); 3bet+ pots → heuristic (continue
   only premium, explain). Suggested sizes: open 2.5bb (3bb UTG), 3bet ≈ 3×
   open (IP) / 4× (OOP), in chips rounded to BB.
-- advice postflop: compare panel equity (caller passes it via ctx? NO —
-  advice computes its own quick equity at ~1500 samples with a seed derived
-  from state.rngSeed) vs required equity when facing a bet; when unraised:
+- advice postflop: compare equity versus uniformly random opponent hands
+  (advice computes its own quick equity at ~1500 samples with a seed derived
+  from state.rngSeed) with required equity when facing a bet. Treat Monte
+  Carlo edges inside the reported sampling margin as inconclusive. When unraised:
   strong made hands (two pair+, top pair good kicker) bet 2/3 pot; good
   draws semi-bluff or check per personality-free baseline; else check.
   Explanations teach: name the made hand/draw, the equity vs price, and the
