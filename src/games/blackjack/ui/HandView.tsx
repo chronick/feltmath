@@ -1,8 +1,9 @@
 import { CardView, type CardSize } from '../../../shared/ui/CardView'
 import { ChipStack } from '../../../shared/ui/ChipStack'
+import { SUIT_SYMBOL, isRedSuit } from '../../../shared/cards'
 import { handLabel, handTotal, isBlackjack } from '../engine/hand'
 import type { HandState } from '../types'
-import { formatSignedMoney, outcomeLabel, outcomeTone } from './format'
+import { formatMoney, formatSignedMoney, outcomeLabel, outcomeTone } from './format'
 
 export interface HandViewProps {
   hand: HandState
@@ -57,6 +58,55 @@ export function HandView({
           <span className={`hand__badge hand__badge--${tone}`}>
             <b>{outcomeLabel(outcome).toUpperCase()}</b>
             {showDelta && <i className="num">{formatSignedMoney(delta)}</i>}
+          </span>
+        )}
+      </div>
+
+      <div className="hand__compact">
+        <span className="hand__compactcards">
+          {hand.cards.map((card) => (
+            <span
+              key={card.id}
+              className="hand__compactcard num"
+              data-red={isRedSuit(card.suit) ? 'true' : 'false'}
+              role="img"
+              aria-label={`${card.rank} of ${card.suit}`}
+            >
+              <b aria-hidden="true">{card.rank}</b>
+              <i aria-hidden="true">{SUIT_SYMBOL[card.suit]}</i>
+            </span>
+          ))}
+        </span>
+
+        {handCount > 1 && (
+          <span
+            className="hand__compactindex num"
+            aria-label={`Hand ${handIndex + 1} of ${handCount}`}
+          >
+            {handIndex + 1}/{handCount}
+          </span>
+        )}
+
+        {hand.cards.length > 0 && (
+          <span
+            className="hand__compacttotal num"
+            data-bust={bust ? 'true' : 'false'}
+            data-natural={natural ? 'true' : 'false'}
+            aria-label={`Hand total ${totalText}`}
+          >
+            {totalText}
+          </span>
+        )}
+
+        {showBet && hand.bet > 0 && (
+          <span className="hand__compactbet num" aria-label={`Bet ${formatMoney(hand.bet)}`}>
+            {formatMoney(hand.bet)}
+          </span>
+        )}
+
+        {outcome && (
+          <span className="hand__compactoutcome" data-tone={tone ?? 'none'}>
+            {outcomeLabel(outcome)}
           </span>
         )}
       </div>

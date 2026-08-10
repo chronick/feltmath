@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { ChipStack } from '../../../shared/ui/ChipStack'
 import { cssVars } from '../../../shared/ui/cssVars'
 import type { CardSize } from '../../../shared/ui/CardView'
@@ -38,6 +39,18 @@ export function SeatView({
   const settled = phase === 'settlement'
   const net = settled ? seatRoundNet(seat) : 0
   const hasHands = seat.hands.length > 0
+  const handsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isActiveSeat || seat.hands.length <= 1) return
+    const scroller = handsRef.current
+    const activeHand = scroller?.children.item(seat.activeHandIndex)
+    if (!(activeHand instanceof HTMLElement) || !scroller) return
+    scroller.scrollTo({
+      left: activeHand.offsetLeft - (scroller.clientWidth - activeHand.clientWidth) / 2,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    })
+  }, [isActiveSeat, seat.activeHandIndex, seat.hands.length])
 
   return (
     <div
@@ -45,7 +58,17 @@ export function SeatView({
       data-active={isActiveSeat ? 'true' : 'false'}
       style={cssVars({ '--arc': `${arcOffset}px` })}
     >
-      <div className="seat__hands" data-hands={seat.hands.length}>
+      <div
+        ref={handsRef}
+        className="seat__hands"
+        data-hands={seat.hands.length}
+        tabIndex={variant === 'ai' && seat.hands.length > 1 ? 0 : undefined}
+        aria-label={
+          seat.hands.length > 1
+            ? `${seat.name}: ${seat.hands.length} split hands`
+            : undefined
+        }
+      >
         {hasHands ? (
           seat.hands.map((hand, index) => (
             <HandView
