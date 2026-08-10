@@ -1,9 +1,12 @@
-# Feltmath
+# Feltmath — Blackjack & Poker Trainer
 
-**feltmath.com** — the math of the felt. A practice-focused casino card
-trainer, built as an installable PWA. Blackjack and No-Limit Texas Hold'em;
-the architecture is multi-game (`src/games/<game>/` over shared card/chip
-primitives in `src/shared/`) so more games can land later.
+**Train Blackjack, Poker, and more.**
+
+[feltmath.com](https://feltmath.com/) is an installable card-game trainer with
+live odds, strategy guidance, and decision-by-decision feedback. It currently
+supports Blackjack and No-Limit Texas Hold'em; the architecture is multi-game
+(`src/games/<game>/` over shared card/chip primitives in `src/shared/`) so more
+games can land later.
 
 ## Features
 

@@ -1,7 +1,7 @@
 {
-  "name": "Feltmath",
+  "name": "Feltmath — Blackjack & Poker Trainer",
   "short_name": "Feltmath",
-  "description": "The math of the felt — casino card trainer with live odds, the book, and honest feedback on every decision. Blackjack and Texas hold'em.",
+  "description": "Train Blackjack, Poker, and more with live odds, strategy guidance, and decision-by-decision feedback.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
